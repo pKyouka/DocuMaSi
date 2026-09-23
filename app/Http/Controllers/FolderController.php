@@ -126,6 +126,20 @@ class FolderController extends Controller
             }
         }
 
+        $existing = Folder::where('name', $validated['name'])
+            ->where('parent_id', $validated['parent_id'] ?? null)
+            ->first();
+
+        if ($existing) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Folder '{$existing->name}' sudah ada.",
+                    'folder' => $existing,
+                ]);
+            }
+        }
+
         $folder = Folder::create([
             'name' => $validated['name'],
             'parent_id' => $validated['parent_id'] ?? null,
@@ -140,6 +154,14 @@ class FolderController extends Controller
             Folder::class,
             $folder->id
         );
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => "Folder '{$folder->name}' berhasil dibuat.",
+                'folder' => $folder,
+            ]);
+        }
 
         return back()->with('success', "Folder '{$folder->name}' berhasil dibuat.");
     }
@@ -262,7 +284,7 @@ class FolderController extends Controller
         abort_unless($user->canUploadDocuments(), 403);
 
         $request->validate([
-            'file' => 'required|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
+            'file' => 'required|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,webp,gif,svg,txt,csv,zip,rar,7z,rtf',
             'folder_id' => 'nullable|exists:folders,id',
         ]);
 

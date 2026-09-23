@@ -355,8 +355,8 @@
             event.preventDefault();
             this.hoveredFolderId = null;
 
-            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-                this.uploadFiles(event.dataTransfer.files, targetFolderId);
+            if (event.dataTransfer.types && event.dataTransfer.types.includes('Files')) {
+                await this.handleDropItems(event.dataTransfer, targetFolderId);
                 return;
             }
 
@@ -364,7 +364,7 @@
             if (!docId) return;
 
             try {
-                const response = await fetch(`/documents/${docId}/move`, {
+                const response = await fetch('/documents/' + docId + '/move', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -400,30 +400,175 @@
             }
         },
 
-        onWindowDrop(event) {
+        async onWindowDrop(event) {
             event.preventDefault();
             this.isDraggingFileOver = false;
-            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-                const currentFolderId = '{{ $currentFolder ? $currentFolder->id : '' }}';
-                this.uploadFiles(event.dataTransfer.files, currentFolderId || null);
-            }
+            const currentFolderId = '{{ $currentFolder ? $currentFolder->id : '' }}';
+            await this.handleDropItems(event.dataTransfer, currentFolderId || null);
         },
 
-        async uploadFiles(files, folderId) {
+        async handleDropItems(dataTransfer, targetFolderId) {
+            const items = dataTransfer.items;
+            this.isUploading = true;
+            this.uploadMessage = 'Memeriksa berkas dan folder...';
+
+            const queue = [];
+
+            if (items && items.length > 0) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind !== 'file') continue;
+
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                    if (entry) {
+                        const traversed = await this.traverseFileSystemEntry(entry, targetFolderId);
+                        queue.push(...traversed);
+                    } else {
+                        const file = item.getAsFile();
+                        if (file) queue.push({ file: file, folderId: targetFolderId });
+                    }
+                }
+            } else if (dataTransfer.files && dataTransfer.files.length > 0) {
+                for (let i = 0; i < dataTransfer.files.length; i++) {
+                    queue.push({ file: dataTransfer.files[i], folderId: targetFolderId });
+                }
+            }
+
+            if (queue.length === 0) {
+                this.isUploading = false;
+                this.triggerToast('Folder berhasil dibuat!');
+                setTimeout(() => { window.location.reload(); }, 600);
+                return;
+            }
+
+            await this.processUploadQueue(queue);
+        },
+
+        async traverseFileSystemEntry(entry, parentFolderId) {
+            if (entry.isFile) {
+                return new Promise(resolve => {
+                    entry.file(file => {
+                        resolve([{ file: file, folderId: parentFolderId }]);
+                    }, () => resolve([]));
+                });
+            } else if (entry.isDirectory) {
+                this.uploadMessage = 'Membuat folder ' + entry.name + '...';
+                let createdFolderId = parentFolderId;
+
+                try {
+                    const res = await fetch('{{ route("folders.store") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            name: entry.name,
+                            parent_id: parentFolderId || null
+                        })
+                    });
+                    const resData = await res.json();
+                    if (resData.success && resData.folder) {
+                        createdFolderId = resData.folder.id;
+                    }
+                } catch (err) {
+                    console.error('Gagal membuat folder:', entry.name, err);
+                }
+
+                const dirReader = entry.createReader();
+                const entries = await new Promise(resolve => {
+                    const all = [];
+                    function readNext() {
+                        dirReader.readEntries(results => {
+                            if (results.length > 0) {
+                                all.push(...results);
+                                readNext();
+                            } else {
+                                resolve(all);
+                            }
+                        }, () => resolve(all));
+                    }
+                    readNext();
+                });
+
+                const nested = [];
+                for (const child of entries) {
+                    const childItems = await this.traverseFileSystemEntry(child, createdFolderId);
+                    nested.push(...childItems);
+                }
+                return nested;
+            }
+            return [];
+        },
+
+        async uploadFolderPicker(files, baseFolderId) {
             if (!files || files.length === 0) return;
             this.isUploading = true;
-            this.uploadMessage = `Mengunggah ${files.length} berkas...`;
+            this.uploadMessage = 'Mempersiapkan struktur folder...';
+
+            const folderMap = {};
+            const queue = [];
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
+                const relPath = file.webkitRelativePath || file.name;
+                const parts = relPath.split('/');
+
+                let parentId = baseFolderId || null;
+                let currentPath = '';
+
+                for (let p = 0; p < parts.length - 1; p++) {
+                    const folderName = parts[p];
+                    currentPath = currentPath ? (currentPath + '/' + folderName) : folderName;
+
+                    if (folderMap[currentPath]) {
+                        parentId = folderMap[currentPath];
+                    } else {
+                        try {
+                            const res = await fetch('{{ route("folders.store") }}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    name: folderName,
+                                    parent_id: parentId
+                                })
+                            });
+                            const data = await res.json();
+                            if (data.success && data.folder) {
+                                folderMap[currentPath] = data.folder.id;
+                                parentId = data.folder.id;
+                            }
+                        } catch (e) {
+                            console.error('Gagal membuat folder:', folderName, e);
+                        }
+                    }
+                }
+
+                queue.push({ file: file, folderId: parentId });
+            }
+
+            await this.processUploadQueue(queue);
+        },
+
+        async processUploadQueue(queue) {
+            this.isUploading = true;
+            this.uploadMessage = 'Mengunggah ' + queue.length + ' berkas...';
+
+            for (let i = 0; i < queue.length; i++) {
+                const item = queue[i];
                 const formData = new FormData();
-                formData.append('file', file);
-                if (folderId) {
-                    formData.append('folder_id', folderId);
+                formData.append('file', item.file);
+                if (item.folderId) {
+                    formData.append('folder_id', item.folderId);
                 }
 
                 try {
-                    this.uploadMessage = `Mengunggah (${i + 1}/${files.length}): ${file.name}...`;
+                    this.uploadMessage = 'Mengunggah (' + (i + 1) + '/' + queue.length + '): ' + item.file.name;
                     const res = await fetch('{{ route("folders.quick-upload") }}', {
                         method: 'POST',
                         headers: {
@@ -434,17 +579,24 @@
                     });
                     const resData = await res.json();
                     if (!resData.success) {
-                        alert(`Gagal mengunggah ${file.name}: ${resData.message || 'Error'}`);
+                        console.error('Gagal mengunggah ' + item.file.name, resData);
                     }
                 } catch (err) {
-                    console.error(err);
-                    alert(`Gagal mengunggah berkas ${file.name}`);
+                    console.error('Gagal mengunggah berkas ' + item.file.name, err);
                 }
             }
 
             this.isUploading = false;
-            this.triggerToast('Semua berkas berhasil diunggah!');
+            this.triggerToast('Semua berkas dan folder berhasil diunggah!');
             setTimeout(() => { window.location.reload(); }, 600);
+        },
+
+        async uploadFiles(files, folderId) {
+            const queue = [];
+            for (let i = 0; i < files.length; i++) {
+                queue.push({ file: files[i], folderId: folderId });
+            }
+            await this.processUploadQueue(queue);
         }
     }" 
     @dragover="onWindowDragOver($event)" 
@@ -516,6 +668,9 @@
                 <!-- Hidden File Input for Instant Upload -->
                 <input type="file" x-ref="quickFileInput" @change="uploadFiles($event.target.files, '{{ $currentFolder ? $currentFolder->id : '' }}')" multiple class="hidden">
 
+                <!-- Hidden Folder Input for Folder Picker -->
+                <input type="file" x-ref="folderPickerInput" webkitdirectory directory @change="uploadFolderPicker($event.target.files, '{{ $currentFolder ? $currentFolder->id : '' }}')" class="hidden">
+
                 <!-- Upload Document Button Group (Gold PSTI Theme) -->
                 <div class="relative inline-flex rounded-lg shadow-sm" x-data="{ uploadMenu: false }">
                     <button type="button" @click="$refs.quickFileInput.click()" class="inline-flex items-center px-3.5 py-1.5 bg-[#f1b500] hover:bg-[#e5a800] text-[#002147] rounded-l-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
@@ -526,10 +681,14 @@
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
 
-                    <div x-show="uploadMenu" @click.outside="uploadMenu = false" class="absolute right-0 mt-8 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-30 text-xs" style="display: none;">
+                    <div x-show="uploadMenu" @click.outside="uploadMenu = false" class="absolute right-0 mt-8 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-30 text-xs" style="display: none;">
                         <button type="button" @click="$refs.quickFileInput.click(); uploadMenu = false;" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2">
                             <svg class="w-4 h-4 text-[#002147]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                            <span>Upload Cepat (File Picker)</span>
+                            <span>Upload Berkas (File Picker)</span>
+                        </button>
+                        <button type="button" @click="$refs.folderPickerInput.click(); uploadMenu = false;" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2">
+                            <svg class="w-4 h-4 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                            <span>Upload Folder Lengkap</span>
                         </button>
                         <a href="{{ route('documents.create', ['folder_id' => $currentFolder ? $currentFolder->id : null]) }}" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2">
                             <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -660,7 +819,7 @@
 
                         <!-- Subfolder Tree level 1 -->
                         @if($rf->children->isNotEmpty())
-                        <div x-show="expanded" class="pl-4 space-y-0.5" style="display: none;">
+                        <div x-show="expanded" x-collapse class="pl-4 space-y-0.5">
                             @foreach($rf->children as $cf)
                             <div class="flex items-center px-2 py-1 rounded-md text-xs {{ ($currentFolder && $currentFolder->id == $cf->id) ? 'bg-[#002147] text-white font-bold' : 'text-gray-600 hover:bg-slate-100 hover:text-[#002147]' }} transition-colors cursor-pointer"
                                  @dragover="onFolderDragOver($event, {{ $cf->id }})"
@@ -691,12 +850,12 @@
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                             </div>
                             <div>
-                                <h4 class="text-xs font-bold text-gray-800 group-hover:text-[#002147] transition-colors">Klik untuk Pilih Berkas atau Drag &amp; Drop ke Sini</h4>
-                                <p class="text-[11px] text-gray-500">Pilih berkas dari komputermu atau tarik langsung ke area ini untuk upload instan ke folder aktif.</p>
+                                <h4 class="text-xs font-bold text-gray-800 group-hover:text-[#002147] transition-colors">Klik untuk Pilih Berkas/Folder atau Drag &amp; Drop ke Sini</h4>
+                                <p class="text-[11px] text-gray-500">Pilih berkas atau folder dari komputermu, atau tarik langsung ke area ini untuk upload instan.</p>
                             </div>
                         </div>
                         <span class="text-[10px] font-bold text-[#002147] bg-[#f1b500] hover:bg-[#e5a800] px-3 py-1.5 rounded-lg uppercase tracking-wider shrink-0 transition-colors shadow-xs">
-                            Pilih Berkas
+                            Pilih Berkas / Folder
                         </span>
                     </div>
 
@@ -710,7 +869,7 @@
 
                         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                             @foreach($subfolders as $sf)
-                            <div class="bg-white rounded-xl border border-gray-200 hover:border-[#002147] hover:shadow-md transition-all p-3.5 flex flex-col justify-between group relative cursor-pointer"
+                            <div class="bg-white rounded-xl border border-gray-200 hover:border-[#002147] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-3.5 flex flex-col justify-between group relative cursor-pointer"
                                  @dragover="onFolderDragOver($event, {{ $sf->id }})"
                                  @dragleave="onFolderDragLeave($event, {{ $sf->id }})"
                                  @drop="onFolderDrop($event, {{ $sf->id }})"
@@ -812,7 +971,7 @@
                                      @dragstart="onDocDragStart($event, '{{ $doc->uuid }}')"
                                      @click="selectDoc({{ json_encode($docPayload) }})"
                                      @contextmenu.prevent="openContextMenu($event, 'document', {{ json_encode($docPayload) }})"
-                                     class="bg-white rounded-2xl border border-gray-200 hover:border-[#002147] hover:shadow-xl transition-all flex flex-col justify-between cursor-pointer group select-none relative overflow-hidden"
+                                     class="bg-white rounded-2xl border border-gray-200 hover:border-[#002147] hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group select-none relative overflow-hidden"
                                      :class="activeDoc && activeDoc.id == {{ $doc->id }} ? 'ring-2 ring-[#002147] bg-slate-50' : ''">
 
                                     <!-- 1. Thumbnail Preview Box (Google Drive Style) -->
@@ -1015,7 +1174,16 @@
             </main>
 
             <!-- Right Pane: File Inspector Drawer (Google Drive Info Panel) -->
-            <aside x-show="inspectorOpen" class="w-72 bg-white border-l border-gray-200 p-5 flex flex-col shrink-0 overflow-y-auto" style="display: none;" x-cloak>
+            <aside x-show="inspectorOpen" 
+                   x-transition:enter="transition ease-out duration-200 transform" 
+                   x-transition:enter-start="translate-x-full opacity-0" 
+                   x-transition:enter-end="translate-x-0 opacity-100" 
+                   x-transition:leave="transition ease-in duration-150 transform" 
+                   x-transition:leave-start="translate-x-0 opacity-100" 
+                   x-transition:leave-end="translate-x-full opacity-0" 
+                   class="w-72 bg-white border-l border-gray-200 p-5 flex flex-col shrink-0 overflow-y-auto shadow-lg" 
+                   style="display: none;" 
+                   x-cloak>
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
                     <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Detail Berkas</h4>
                     <button @click="inspectorOpen = false" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
