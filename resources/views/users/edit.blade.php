@@ -56,8 +56,15 @@
                         </div>
 
                         <div class="md:col-span-2 pt-4 border-t border-gray-100">
-                            <label class="block text-sm font-medium text-gray-700">Unit / Prodi / Departemen</label>
-                            <input type="text" name="department" value="{{ old('department', $user->department) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                            <label class="block text-sm font-medium text-gray-700">Unit (Biro / Jurusan / Prodi)</label>
+                            <select name="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <option value="">Pusat / Umum</option>
+                                @foreach(\App\Models\User::UNITS as $unit)
+                                    <option value="{{ $unit === 'Program Studi PSTI' ? 'PSTI' : $unit }}" {{ old('department', $user->department) == ($unit === 'Program Studi PSTI' ? 'PSTI' : $unit) ? 'selected' : '' }}>
+                                        {{ $unit }}
+                                    </option>
+                                @endforeach
+                            </select>
                             @error('department') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 

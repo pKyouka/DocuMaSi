@@ -35,6 +35,16 @@ class Document extends Model
         self::STATUS_ARCHIVED => 'purple',
     ];
 
+    const VISIBILITY_VIEWER = 'viewer';
+    const VISIBILITY_INTERNAL = 'internal';
+    const VISIBILITY_PRIVATE = 'private';
+
+    const VISIBILITIES = [
+        self::VISIBILITY_VIEWER => 'Tampil ke Viewer',
+        self::VISIBILITY_INTERNAL => 'Internal',
+        self::VISIBILITY_PRIVATE => 'Private',
+    ];
+
     const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip'];
 
     const ALLOWED_MIMES = [
@@ -55,6 +65,7 @@ class Document extends Model
         'name',
         'document_number',
         'category_id',
+        'folder_id',
         'department',
         'academic_year',
         'semester',
@@ -63,9 +74,14 @@ class Document extends Model
         'description',
         'tags',
         'document_date',
+        'display_date',
         'upload_date',
         'original_uploaded_at',
+        'actual_uploaded_at',
         'status',
+        'visibility',
+        'shared_departments',
+        'is_downloadable',
         'current_version',
         'created_by',
         'approved_by',
@@ -76,10 +92,14 @@ class Document extends Model
     protected $casts = [
         'tags' => 'array',
         'document_date' => 'date',
+        'display_date' => 'date',
         'upload_date' => 'date',
         'original_uploaded_at' => 'datetime',
+        'actual_uploaded_at' => 'datetime',
         'approved_at' => 'datetime',
         'archived_at' => 'datetime',
+        'is_downloadable' => 'boolean',
+        'shared_departments' => 'array',
     ];
 
     protected static function boot()
@@ -93,6 +113,12 @@ class Document extends Model
             if (empty($document->original_uploaded_at)) {
                 $document->original_uploaded_at = now();
             }
+            if (empty($document->actual_uploaded_at)) {
+                $document->actual_uploaded_at = $document->original_uploaded_at;
+            }
+            if (empty($document->display_date)) {
+                $document->display_date = $document->document_date ?? now()->toDateString();
+            }
         });
     }
 
@@ -104,6 +130,11 @@ class Document extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function folder()
+    {
+        return $this->belongsTo(Folder::class);
     }
 
     public function creator()
@@ -170,6 +201,77 @@ class Document extends Model
     public function isArchivable(): bool
     {
         return $this->status === self::STATUS_APPROVED;
+    }
+
+    public function getVisibilityLabelAttribute(): string
+    {
+        return self::VISIBILITIES[$this->visibility] ?? 'Tampil ke Viewer';
+    }
+
+    public function getEffectiveDisplayDateAttribute()
+    {
+        return $this->display_date ?? $this->document_date ?? $this->upload_date;
+    }
+
+    public function getEffectiveSharedDepartments(): array
+    {
+        if (!is_null($this->shared_departments)) {
+            return $this->shared_departments;
+        }
+
+        if ($this->folder) {
+            return $this->folder->getEffectiveSharedDepartments();
+        }
+
+        return [];
+    }
+
+    public function canAccess(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Creator and owner department can always access
+        if ($this->created_by === $user->id) {
+            return true;
+        }
+
+        if ($this->department && (
+            $this->department === $user->department ||
+            ($this->department === 'PSTI' && $user->department === 'Program Studi PSTI') ||
+            ($this->department === 'Program Studi PSTI' && $user->department === 'PSTI')
+        )) {
+            return true;
+        }
+
+        // Check explicit shared departments
+        $shared = $this->getEffectiveSharedDepartments();
+        if (!empty($shared)) {
+            $userDepts = array_filter([
+                $user->department,
+                $user->department === 'PSTI' ? 'Program Studi PSTI' : null,
+                $user->department === 'Program Studi PSTI' ? 'PSTI' : null,
+            ]);
+            return !empty(array_intersect($userDepts, $shared));
+        }
+
+        // If visibility is viewer, all users can view
+        if ($this->visibility === self::VISIBILITY_VIEWER) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function scopeForViewer($query)
+    {
+        return $query->where('visibility', self::VISIBILITY_VIEWER)
+            ->where('status', '!=', self::STATUS_ARCHIVED);
     }
 
     public function scopeActive($query)

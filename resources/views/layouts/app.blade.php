@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'SIMDOK PSTI') }} - Sistem Manajemen Dokumen</title>
+        <title>{{ config('app.name', 'DocuMaSi') }} - Sistem Manajemen Dokumen</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,34 +15,27 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased text-gray-900 bg-gray-50 flex h-screen overflow-hidden">
+    <body class="font-sans antialiased text-gray-900 bg-gray-50 flex flex-col h-screen overflow-hidden">
         
-        <!-- Sidebar -->
-        @include('components.sidebar')
+        <!-- Topbar Navigation (Tanpa Sidebar Gelap) -->
+        @include('components.topbar')
 
-        <!-- Main Content Wrapper -->
-        <div class="flex-1 flex flex-col h-screen overflow-hidden">
-            
-            <!-- Topbar -->
-            @include('components.topbar')
+        <!-- Page Content -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6 lg:p-8">
+            <!-- Flash Messages -->
+            @if (session('success'))
+                <div class="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-xl shadow-sm" role="alert">
+                    <p>{{ session('success') }}</p>
+                </div>
+            @endif
 
-            <!-- Page Content -->
-            <main class="flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6 lg:p-8">
-                <!-- Flash Messages -->
-                @if (session('success'))
-                    <div class="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm" role="alert">
-                        <p>{{ session('success') }}</p>
-                    </div>
-                @endif
+            @if (session('error'))
+                <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-xl shadow-sm" role="alert">
+                    <p>{{ session('error') }}</p>
+                </div>
+            @endif
 
-                @if (session('error'))
-                    <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm" role="alert">
-                        <p>{{ session('error') }}</p>
-                    </div>
-                @endif
-
-                {{ $slot }}
-            </main>
-        </div>
+            {{ $slot }}
+        </main>
     </body>
 </html>

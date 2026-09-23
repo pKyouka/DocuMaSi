@@ -13,18 +13,48 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, SoftDeletes;
 
-    const ROLE_SUPER_ADMIN = 'super_admin';
+    const ROLE_SUPERADMIN = 'superadmin';
     const ROLE_ADMIN = 'admin';
-    const ROLE_BIRO = 'biro';
-    const ROLE_REVIEWER = 'reviewer';
     const ROLE_USER = 'user';
 
+    // Aliases for backward compatibility
+    const ROLE_SUPER_ADMIN = self::ROLE_SUPERADMIN;
+
     const ROLES = [
-        self::ROLE_SUPER_ADMIN => 'Super Admin',
-        self::ROLE_ADMIN => 'Admin',
-        self::ROLE_BIRO => 'Biro',
-        self::ROLE_REVIEWER => 'Reviewer',
-        self::ROLE_USER => 'User',
+        self::ROLE_SUPERADMIN => 'Superadmin',
+        self::ROLE_ADMIN => 'Admin (Biro / Jurusan)',
+        self::ROLE_USER => 'User (Pengguna Biasa)',
+    ];
+
+    const BIROS = [
+        'Biro Akademik',
+        'Biro Penjaminan Mutu',
+        'Biro Kemahasiswaan dan Alumni',
+        'Biro Aset dan Umum',
+        'Lembaga Pengkajian dan Pengamalan Islam',
+        'UPT Perpustakaan',
+        'Badan Perencanaan dan Pengembangan (BPP)',
+        'Lembaga Penelitian dan Pengabdian kepada Masyarakat',
+        'Badan Pengembangan Teknologi dan Sistem Informasi',
+        'UPT Laboratiorium',
+        'Biro Humas dan Protokol',
+        'Biro Kerjasama dan Urusan Internasional',
+    ];
+
+    const UNITS = [
+        'Biro Akademik',
+        'Biro Penjaminan Mutu',
+        'Biro Kemahasiswaan dan Alumni',
+        'Biro Aset dan Umum',
+        'Lembaga Pengkajian dan Pengamalan Islam',
+        'UPT Perpustakaan',
+        'Badan Perencanaan dan Pengembangan (BPP)',
+        'Lembaga Penelitian dan Pengabdian kepada Masyarakat',
+        'Badan Pengembangan Teknologi dan Sistem Informasi',
+        'UPT Laboratiorium',
+        'Biro Humas dan Protokol',
+        'Biro Kerjasama dan Urusan Internasional',
+        'Program Studi PSTI',
     ];
 
     protected $fillable = [
@@ -52,17 +82,17 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN;
+        return in_array($this->role, [self::ROLE_SUPERADMIN, 'super_admin']);
     }
 
     public function isAdmin(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN]);
+        return $this->isSuperAdmin() || in_array($this->role, [self::ROLE_ADMIN, 'biro', 'reviewer']);
     }
 
     public function isReviewer(): bool
     {
-        return $this->role === self::ROLE_REVIEWER;
+        return $this->isAdmin();
     }
 
     public function isUser(): bool
@@ -72,22 +102,22 @@ class User extends Authenticatable
 
     public function canEditUploadDate(): bool
     {
-        return $this->isSuperAdmin() || $this->role === self::ROLE_ADMIN;
+        return $this->isAdmin();
     }
 
     public function canManageUsers(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_BIRO]);
+        return $this->isSuperAdmin();
     }
 
     public function canApproveDocuments(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_REVIEWER]);
+        return $this->isAdmin();
     }
 
     public function canUploadDocuments(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN, self::ROLE_BIRO]);
+        return (bool) $this->is_active;
     }
 
     public function canDeleteDocuments(): bool
@@ -97,17 +127,26 @@ class User extends Authenticatable
 
     public function canManageCategories(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN, self::ROLE_BIRO]);
+        return $this->isAdmin();
     }
 
     public function canViewAuditTrail(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN, self::ROLE_BIRO]);
+        return $this->isSuperAdmin();
     }
 
     public function getRoleLabelAttribute(): string
     {
-        return self::ROLES[$this->role] ?? $this->role;
+        if (isset(self::ROLES[$this->role])) {
+            return self::ROLES[$this->role];
+        }
+        if ($this->role === 'super_admin') {
+            return 'Superadmin';
+        }
+        if (in_array($this->role, ['biro', 'reviewer'])) {
+            return 'Admin (Biro / Jurusan)';
+        }
+        return ucfirst($this->role);
     }
 
     public function documents()

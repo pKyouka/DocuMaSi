@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'SIMDOK PSTI') }} - Pencarian Publik</title>
+        <title>{{ config('app.name', 'DocuMaSi') }} - Pencarian Publik</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,11 +24,11 @@
                     <!-- Logo -->
                     <div class="flex shrink-0 items-center">
                         <a href="{{ route('search.index') }}" class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-lg bg-[#00875a] flex items-center justify-center text-white font-bold shadow-sm">
-                                U
+                            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black shadow-sm">
+                                D
                             </div>
                             <div class="hidden sm:block">
-                                <h1 class="text-sm font-bold leading-tight text-[#173b30]">SIMDOK PSTI</h1>
+                                <h1 class="text-sm font-bold leading-tight text-[#173b30]">DocuMaSi</h1>
                                 <p class="text-[9px] text-gray-500 uppercase tracking-widest font-semibold">Portal Dokumen Publik</p>
                             </div>
                         </a>

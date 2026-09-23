@@ -6,6 +6,8 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Folder;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -14,16 +16,23 @@ class DocumentController extends Controller
 {
     public function index(Request $request)
     {
+        $user = auth()->user();
         $categories = Category::where('is_active', true)->orderBy('name')->get();
 
-        $documents = Document::with(['category', 'creator'])
+        $query = Document::with(['category', 'creator', 'folder'])
             ->active()
             ->when($request->search, fn($q, $s) => $q->search($s))
             ->filter($request->only([
                 'category_id', 'academic_year', 'semester',
                 'status', 'pic', 'department', 'date_from', 'date_to'
-            ]))
-            ->orderBy('created_at', 'desc')
+            ]));
+
+        // If user is Admin (Biro/Jurusan), only view their unit's documents
+        if ($user && $user->isAdmin() && !$user->isSuperAdmin() && $user->department) {
+            $query->where('department', $user->department);
+        }
+
+        $documents = $query->orderBy('created_at', 'desc')
             ->paginate(15)
             ->withQueryString();
 
@@ -32,23 +41,34 @@ class DocumentController extends Controller
         return view('documents.index', compact('documents', 'categories', 'academicYears'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->authorize('upload', Document::class);
+        $user = auth()->user();
 
         $categories = Category::where('is_active', true)->orderBy('name')->get();
+        
+        if ($user->isSuperAdmin()) {
+            $folders = Folder::orderBy('name')->get();
+        } else {
+            $folders = Folder::accessible($user)->orderBy('name')->get();
+        }
 
-        return view('documents.create', compact('categories'));
+        $selectedFolderId = $request->get('folder_id');
+
+        return view('documents.create', compact('categories', 'folders', 'selectedFolderId'));
     }
 
     public function store(Request $request)
     {
         $this->authorize('upload', Document::class);
+        $user = auth()->user();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'document_number' => 'nullable|string|max:100',
             'category_id' => 'required|exists:categories,id',
+            'folder_id' => 'nullable|exists:folders,id',
             'department' => 'nullable|string|max:255',
             'academic_year' => 'nullable|string|max:20',
             'semester' => 'nullable|string|max:20',
@@ -56,10 +76,24 @@ class DocumentController extends Controller
             'pic' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:2000',
             'tags' => 'nullable|string',
-            'document_date' => 'required|date',
-            'upload_date' => 'required|date',
+            'display_date' => 'required|date',
+            'visibility' => 'required|in:viewer,internal,private',
+            'is_downloadable' => 'nullable|boolean',
             'file' => 'required|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
         ]);
+
+        // Validate folder permission
+        if (!empty($validated['folder_id'])) {
+            $targetFolder = Folder::findOrFail($validated['folder_id']);
+            abort_unless($targetFolder->canAccess($user), 403, 'Akses ke folder tujuan ditolak.');
+            if (empty($validated['department'])) {
+                $validated['department'] = $targetFolder->getEffectiveDepartment();
+            }
+        }
+
+        if (empty($validated['department']) && $user->department) {
+            $validated['department'] = $user->department;
+        }
 
         $file = $request->file('file');
         $originalFilename = $file->getClientOriginalName();
@@ -73,21 +107,26 @@ class DocumentController extends Controller
         $document = Document::create([
             'uuid' => (string) Str::uuid(),
             'name' => $validated['name'],
-            'document_number' => $validated['document_number'],
+            'document_number' => $validated['document_number'] ?? null,
             'category_id' => $validated['category_id'],
+            'folder_id' => $validated['folder_id'] ?? null,
             'department' => $validated['department'],
-            'academic_year' => $validated['academic_year'],
-            'semester' => $validated['semester'],
-            'course_name' => $validated['course_name'],
-            'pic' => $validated['pic'],
-            'description' => $validated['description'],
+            'academic_year' => $validated['academic_year'] ?? null,
+            'semester' => $validated['semester'] ?? null,
+            'course_name' => $validated['course_name'] ?? null,
+            'pic' => $validated['pic'] ?? null,
+            'description' => $validated['description'] ?? null,
             'tags' => $tags,
-            'document_date' => $validated['document_date'],
-            'upload_date' => $validated['upload_date'],
+            'document_date' => $validated['display_date'],
+            'display_date' => $validated['display_date'],
+            'upload_date' => now()->toDateString(),
             'original_uploaded_at' => now(),
-            'status' => Document::STATUS_DRAFT,
+            'actual_uploaded_at' => now(),
+            'status' => $validated['visibility'] === 'viewer' ? Document::STATUS_APPROVED : Document::STATUS_DRAFT,
+            'visibility' => $validated['visibility'],
+            'is_downloadable' => $request->boolean('is_downloadable', true),
             'current_version' => 1,
-            'created_by' => auth()->id(),
+            'created_by' => $user->id,
         ]);
 
         DocumentVersion::create([
@@ -97,16 +136,21 @@ class DocumentController extends Controller
             'original_filename' => $originalFilename,
             'file_size' => $file->getSize(),
             'mime_type' => $file->getMimeType(),
-            'uploaded_by' => auth()->id(),
+            'uploaded_by' => $user->id,
             'notes' => 'Upload awal',
         ]);
 
         AuditLog::log(
             'document_created',
-            "Dokumen '{$document->name}' berhasil dibuat.",
+            "Dokumen '{$document->name}' berhasil dibuat dengan visibilitas {$document->visibility_label}.",
             Document::class,
             $document->id,
         );
+
+        if (!empty($document->folder_id)) {
+            return redirect()->route('folders.index', ['folder_id' => $document->folder_id])
+                ->with('success', 'Dokumen berhasil ditambahkan ke folder.');
+        }
 
         return redirect()->route('documents.show', $document)
             ->with('success', 'Dokumen berhasil ditambahkan.');
@@ -114,9 +158,10 @@ class DocumentController extends Controller
 
     public function show(Document $document)
     {
-        abort_if(auth()->guest() && $document->status !== Document::STATUS_APPROVED, 404);
+        $user = auth()->user();
+        abort_unless($document->canAccess($user), 403, 'Unit Anda tidak memiliki izin akses ke dokumen ini.');
 
-        $document->load(['category', 'creator', 'approver', 'versions.uploader', 'approvals.user']);
+        $document->load(['category', 'folder', 'creator', 'approver', 'versions.uploader', 'approvals.user']);
 
         return view('documents.show', compact('document'));
     }
@@ -124,25 +169,34 @@ class DocumentController extends Controller
     public function edit(Document $document)
     {
         $this->authorize('update', $document);
+        $user = auth()->user();
 
         $categories = Category::where('is_active', true)->orderBy('name')->get();
+        if ($user->isSuperAdmin()) {
+            $folders = Folder::orderBy('name')->get();
+        } else {
+            $folders = Folder::accessible($user)->orderBy('name')->get();
+        }
+
         $auditLogs = AuditLog::where('model_type', Document::class)
             ->where('model_id', $document->id)
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get();
 
-        return view('documents.edit', compact('document', 'categories', 'auditLogs'));
+        return view('documents.edit', compact('document', 'categories', 'folders', 'auditLogs'));
     }
 
     public function update(Request $request, Document $document)
     {
         $this->authorize('update', $document);
+        $user = auth()->user();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'document_number' => 'nullable|string|max:100',
             'category_id' => 'required|exists:categories,id',
+            'folder_id' => 'nullable|exists:folders,id',
             'department' => 'nullable|string|max:255',
             'academic_year' => 'nullable|string|max:20',
             'semester' => 'nullable|string|max:20',
@@ -150,28 +204,18 @@ class DocumentController extends Controller
             'pic' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:2000',
             'tags' => 'nullable|string',
-            'document_date' => 'required|date',
-            'upload_date' => 'required|date',
+            'display_date' => 'required|date',
+            'visibility' => 'required|in:viewer,internal,private',
+            'is_downloadable' => 'nullable|boolean',
             'status' => 'required|in:draft,submitted,review,revision,approved,archived',
         ]);
 
-        $oldValues = $document->only(['name', 'document_number', 'category_id', 'upload_date', 'document_date', 'status']);
-
-        // Check upload_date change - only admin/super_admin can edit
-        if ($validated['upload_date'] !== $document->upload_date->format('Y-m-d')) {
-            if (!auth()->user()->canEditUploadDate()) {
-                return back()->with('error', 'Anda tidak memiliki izin untuk mengubah tanggal upload.');
-            }
-
-            AuditLog::log(
-                'upload_date_changed',
-                "Tanggal upload diubah dari {$document->upload_date->format('d F Y')} menjadi " . \Carbon\Carbon::parse($validated['upload_date'])->format('d F Y') . " oleh " . auth()->user()->name . ".",
-                Document::class,
-                $document->id,
-                ['upload_date' => $document->upload_date->format('Y-m-d')],
-                ['upload_date' => $validated['upload_date']],
-            );
+        if (!empty($validated['folder_id'])) {
+            $targetFolder = Folder::findOrFail($validated['folder_id']);
+            abort_unless($targetFolder->canAccess($user), 403, 'Akses ke folder tujuan ditolak.');
         }
+
+        $oldValues = $document->only(['name', 'document_number', 'category_id', 'folder_id', 'display_date', 'visibility', 'status']);
 
         $tags = null;
         if (!empty($validated['tags'])) {
@@ -180,17 +224,20 @@ class DocumentController extends Controller
 
         $document->update([
             'name' => $validated['name'],
-            'document_number' => $validated['document_number'],
+            'document_number' => $validated['document_number'] ?? null,
             'category_id' => $validated['category_id'],
+            'folder_id' => $validated['folder_id'] ?? null,
             'department' => $validated['department'],
-            'academic_year' => $validated['academic_year'],
-            'semester' => $validated['semester'],
-            'course_name' => $validated['course_name'],
-            'pic' => $validated['pic'],
-            'description' => $validated['description'],
+            'academic_year' => $validated['academic_year'] ?? null,
+            'semester' => $validated['semester'] ?? null,
+            'course_name' => $validated['course_name'] ?? null,
+            'pic' => $validated['pic'] ?? null,
+            'description' => $validated['description'] ?? null,
             'tags' => $tags,
-            'document_date' => $validated['document_date'],
-            'upload_date' => $validated['upload_date'],
+            'display_date' => $validated['display_date'],
+            'document_date' => $validated['display_date'],
+            'visibility' => $validated['visibility'],
+            'is_downloadable' => $request->boolean('is_downloadable', true),
             'status' => $validated['status'],
         ]);
 
@@ -200,7 +247,7 @@ class DocumentController extends Controller
             Document::class,
             $document->id,
             $oldValues,
-            $document->only(['name', 'document_number', 'category_id', 'upload_date', 'document_date', 'status']),
+            $document->only(['name', 'document_number', 'category_id', 'folder_id', 'display_date', 'visibility', 'status']),
         );
 
         return redirect()->route('documents.show', $document)
@@ -226,13 +273,18 @@ class DocumentController extends Controller
 
     public function download(Document $document, ?DocumentVersion $version = null)
     {
-        abort_if(auth()->guest() && $document->status !== Document::STATUS_APPROVED, 404);
+        $user = auth()->user();
+        abort_unless($document->canAccess($user), 403, 'Unit Anda tidak memiliki izin akses ke dokumen ini.');
+
+        if (!$document->is_downloadable && $user && $user->isUser()) {
+            return back()->with('error', 'Dokumen ini tidak diizinkan untuk diunduh (hanya pratinjau).');
+        }
 
         $ver = $version ?? $document->latestVersion;
         abort_unless($ver && $ver->document_id === $document->id, 404);
 
         if (!Storage::disk('private')->exists($ver->file_path)) {
-            return back()->with('error', 'File tidak ditemukan.');
+            return back()->with('error', 'File tidak ditemukan di penyimpanan server.');
         }
 
         AuditLog::log(
@@ -243,6 +295,100 @@ class DocumentController extends Controller
         );
 
         return Storage::disk('private')->download($ver->file_path, $ver->original_filename);
+    }
+
+    public function preview(Document $document, ?DocumentVersion $version = null)
+    {
+        $user = auth()->user();
+        abort_unless($document->canAccess($user), 403, 'Unit Anda tidak memiliki izin akses ke dokumen ini.');
+
+        $ver = $version ?? $document->latestVersion;
+        abort_unless($ver && $ver->document_id === $document->id, 404);
+
+        if (!Storage::disk('private')->exists($ver->file_path)) {
+            abort(404, 'File tidak ditemukan di penyimpanan server.');
+        }
+
+        AuditLog::log(
+            'document_previewed',
+            "Dokumen '{$document->name}' v{$ver->version_number} dilihat pratinjau.",
+            Document::class,
+            $document->id,
+        );
+
+        return Storage::disk('private')->response($ver->file_path, $ver->original_filename, [
+            'Content-Type' => $ver->mime_type,
+            'Content-Disposition' => 'inline; filename="' . $ver->original_filename . '"',
+        ]);
+    }
+
+    public function updateSharing(Request $request, $document)
+    {
+        $user = auth()->user();
+        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+
+        $isOwnerDept = ($doc->department && $user->department && (
+            $doc->department === $user->department ||
+            ($doc->department === 'PSTI' && $user->department === 'Program Studi PSTI') ||
+            ($doc->department === 'Program Studi PSTI' && $user->department === 'PSTI')
+        ));
+
+        abort_unless($user && ($user->isSuperAdmin() || $doc->created_by === $user->id || $isOwnerDept), 403, 'Anda tidak memiliki hak untuk mengatur pembagian dokumen ini.');
+
+        $validated = $request->validate([
+            'shared_departments' => 'nullable|array',
+            'shared_departments.*' => 'string|in:' . implode(',', array_merge(User::UNITS, ['PSTI'])),
+        ]);
+
+        $sharedDepts = $validated['shared_departments'] ?? [];
+        $doc->update(['shared_departments' => $sharedDepts]);
+
+        AuditLog::log(
+            'document_shared',
+            "Izin akses dokumen '{$doc->name}' diperbarui ke: " . (empty($sharedDepts) ? 'Hanya unit pemilik' : implode(', ', $sharedDepts)),
+            Document::class,
+            $doc->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Izin akses dokumen berhasil disimpan.',
+            'shared_departments' => $sharedDepts,
+        ]);
+    }
+
+    public function updateDisplayDate(Request $request, $document)
+    {
+        $user = auth()->user();
+        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+
+        $this->authorize('update', $doc);
+
+        $validated = $request->validate([
+            'display_date' => 'required|date',
+        ]);
+
+        $oldDate = $doc->effective_display_date ? $doc->effective_display_date->format('Y-m-d') : '-';
+        $newDate = $validated['display_date'];
+
+        $doc->update([
+            'display_date' => $newDate,
+            'document_date' => $newDate,
+        ]);
+
+        AuditLog::log(
+            'display_date_changed',
+            "Tanggal tampil dokumen '{$doc->name}' diubah dari '{$oldDate}' menjadi '{$newDate}'",
+            Document::class,
+            $doc->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tanggal tampil dokumen berhasil diperbarui.',
+            'display_date' => $doc->effective_display_date->format('Y-m-d'),
+            'display_date_formatted' => $doc->effective_display_date->format('d F Y'),
+        ]);
     }
 
     public function uploadVersion(Request $request, Document $document)
