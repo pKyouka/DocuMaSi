@@ -12,6 +12,12 @@ use RuntimeException;
 class GoogleDriveService
 {
     public const READ_ONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+    public const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
+
+    public static function isFolderMimeType(?string $mimeType): bool
+    {
+        return $mimeType === self::FOLDER_MIME_TYPE;
+    }
 
     public static function isImportableMimeType(?string $mimeType): bool
     {
@@ -90,6 +96,69 @@ class GoogleDriveService
         } while ($pageToken);
 
         return $items;
+    }
+
+    public function listFolders(User $user): array
+    {
+        $drive = $this->driveFor($user);
+        $result = $drive->files->listFiles([
+            'q' => "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            'spaces' => 'drive',
+            'fields' => 'files(id, name, modifiedTime, parents, webViewLink)',
+            'pageSize' => 500,
+            'orderBy' => 'name',
+        ]);
+
+        $folders = [];
+        foreach ($result->getFiles() as $folder) {
+            $folders[] = [
+                'id' => $folder->getId(),
+                'name' => $folder->getName(),
+                'parents' => $folder->getParents() ?? [],
+                'modified_time' => $folder->getModifiedTime(),
+                'web_view_link' => $folder->getWebViewLink(),
+            ];
+        }
+
+        return $folders;
+    }
+
+    public function listFilesInFolder(User $user, string $folderId): array
+    {
+        $drive = $this->driveFor($user);
+        $escaped = str_replace(["\\", "'"], ["\\\\", "\\'"], $folderId);
+        $result = $drive->files->listFiles([
+            'q' => "'{$escaped}' in parents and trashed = false",
+            'spaces' => 'drive',
+            'fields' => 'files(id, name, mimeType, size, modifiedTime, webViewLink)',
+            'pageSize' => 500,
+            'orderBy' => 'folder, name',
+        ]);
+
+        $items = [];
+        foreach ($result->getFiles() as $file) {
+            $items[] = [
+                'id' => $file->getId(),
+                'name' => $file->getName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => (int) ($file->getSize() ?? 0),
+                'is_folder' => $file->getMimeType() === self::FOLDER_MIME_TYPE,
+                'importable' => self::isImportableMimeType($file->getMimeType()),
+            ];
+        }
+
+        return $items;
+    }
+
+    public function getFolderMetadata(User $user, string $folderId): array
+    {
+        $drive = $this->driveFor($user);
+        $folder = $drive->files->get($folderId, ['fields' => 'id,name,mimeType']);
+
+        return [
+            'id' => $folder->getId(),
+            'name' => $folder->getName(),
+        ];
     }
 
     public function download(User $user, string $fileId): array

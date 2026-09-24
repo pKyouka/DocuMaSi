@@ -645,6 +645,16 @@
                         <p class="text-[10px] text-[#f1b500] font-bold uppercase tracking-wider">File Explorer &bull; PSTI</p>
                     </div>
                 </a>
+
+                <nav class="hidden md:flex items-center gap-1.5 pl-4 border-l border-white/10 text-xs font-semibold">
+                    <a href="{{ route('folders.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('folders.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors">
+                        File Explorer
+                    </a>
+                    <a href="{{ route('google-drive.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('google-drive.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                        Google Drive
+                    </a>
+                </nav>
             </div>
 
             <!-- Right Controls & User Info -->
@@ -695,6 +705,10 @@
                             <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             <span>Form Lengkap &amp; Metadata</span>
                         </a>
+                        <a href="{{ route('google-drive.index') }}" class="w-full text-left px-3.5 py-2 text-blue-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2 border-t border-gray-100 font-semibold">
+                            <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                            <span>Impor dari Google Drive</span>
+                        </a>
                     </div>
                 </div>
                 @endif
@@ -717,6 +731,11 @@
                             <p class="text-xs font-bold text-gray-900">{{ auth()->user()->name }}</p>
                             <p class="text-[11px] text-gray-500 truncate">{{ auth()->user()->department ?? 'Superadmin Pusat' }}</p>
                         </div>
+
+                        <a href="{{ route('google-drive.index') }}" class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
+                            <svg class="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                            Google Drive (Cloud)
+                        </a>
 
                         @if(auth()->user()->isSuperAdmin())
                         <a href="{{ route('users.index') }}" class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
@@ -799,6 +818,16 @@
                         <svg class="w-4 h-4 mr-2 {{ empty($currentFolder) ? 'text-[#f1b500]' : 'text-blue-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
                         Semua Dokumen
                     </a>
+
+                    <!-- Google Drive Cloud Shortcut -->
+                    <a href="{{ route('google-drive.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900 transition-colors">
+                        <svg class="w-4 h-4 mr-2 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                        <span>Google Drive (Cloud)</span>
+                    </a>
+
+                    <div class="pt-2 pb-1 px-1">
+                        <div class="border-t border-gray-100"></div>
+                    </div>
 
                     <!-- Tree Items -->
                     @foreach($folderTree as $rf)

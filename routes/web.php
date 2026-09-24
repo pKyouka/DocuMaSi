@@ -20,7 +20,9 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get('google-drive', [GoogleDriveController::class, 'index'])->name('google-drive.index');
     Route::get('google-drive/connect', [GoogleDriveController::class, 'connect'])->name('google-drive.connect');
+    Route::post('google-drive/disconnect', [GoogleDriveController::class, 'disconnect'])->name('google-drive.disconnect');
     Route::post('google-drive/import', [GoogleDriveController::class, 'import'])->name('google-drive.import');
+    Route::post('google-drive/import-folder', [GoogleDriveController::class, 'importFolder'])->name('google-drive.import-folder');
 
     Route::get('documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
     Route::get('documents/{document}/preview/{version?}', [DocumentController::class, 'preview'])->name('documents.preview');

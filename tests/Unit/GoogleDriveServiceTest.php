@@ -19,4 +19,10 @@ class GoogleDriveServiceTest extends TestCase
         $this->assertFalse(GoogleDriveService::isImportableMimeType('application/vnd.google-apps.spreadsheet'));
         $this->assertFalse(GoogleDriveService::isImportableMimeType('application/vnd.google-apps.presentation'));
     }
+
+    public function test_folder_mime_type_is_recognized(): void
+    {
+        $this->assertTrue(GoogleDriveService::isFolderMimeType('application/vnd.google-apps.folder'));
+        $this->assertFalse(GoogleDriveService::isFolderMimeType('application/pdf'));
+    }
 }
