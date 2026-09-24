@@ -226,6 +226,14 @@ class Document extends Model
         return [];
     }
 
+    public function isSharedFromOtherDepartment(?User $user): bool
+    {
+        if (!$user || $user->isSuperAdmin()) {
+            return false;
+        }
+        return $this->department && !$user->matchesDepartment($this->department);
+    }
+
     public function canAccess(?User $user): bool
     {
         if (!$user) {
@@ -241,23 +249,19 @@ class Document extends Model
             return true;
         }
 
-        if ($this->department && (
-            $this->department === $user->department ||
-            ($this->department === 'PSTI' && $user->department === 'Program Studi PSTI') ||
-            ($this->department === 'Program Studi PSTI' && $user->department === 'PSTI')
-        )) {
+        if ($this->department && $user->matchesDepartment($this->department)) {
             return true;
         }
 
         // Check explicit shared departments
         $shared = $this->getEffectiveSharedDepartments();
         if (!empty($shared)) {
-            $userDepts = array_filter([
-                $user->department,
-                $user->department === 'PSTI' ? 'Program Studi PSTI' : null,
-                $user->department === 'Program Studi PSTI' ? 'PSTI' : null,
-            ]);
-            return !empty(array_intersect($userDepts, $shared));
+            return $user->isDepartmentSharedWith($shared);
+        }
+
+        // If from another department and not shared to user's department, deny access
+        if ($this->department && !$user->matchesDepartment($this->department)) {
+            return false;
         }
 
         // If visibility is viewer, all users can view

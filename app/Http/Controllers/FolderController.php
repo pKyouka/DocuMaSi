@@ -25,8 +25,27 @@ class FolderController extends Controller
             abort_unless($currentFolder->canAccess($user), 403, 'Unit Anda tidak memiliki izin akses ke folder ini.');
             $breadcrumbs = $currentFolder->getBreadcrumbs();
 
-            $subfolders = $currentFolder->children()->orderBy('name')->get();
+            if ($user && !$user->isSuperAdmin() && $currentFolder->isSharedFromOtherDepartment($user)) {
+                $subfolders = $currentFolder->getAccessibleChildren($user);
+            } else {
+                $subfolders = $currentFolder->children()->orderBy('name')->get();
+            }
+
             $documentsQuery = $currentFolder->documents()->with(['category', 'latestVersion', 'creator']);
+
+            // If user is from another department and the folder itself was not directly shared (only specific files shared)
+            if ($user && !$user->isSuperAdmin() && $currentFolder->isSharedFromOtherDepartment($user)) {
+                if (!$currentFolder->isDirectlyAccessibleBy($user)) {
+                    // Only show documents that are explicitly shared to user's department
+                    $aliases = $user->getDepartmentAliases();
+                    $documentsQuery->where(function ($q) use ($aliases, $user) {
+                        $q->where('created_by', $user->id);
+                        foreach ($aliases as $alias) {
+                            $q->orWhere('shared_departments', 'like', '%"' . $alias . '"%');
+                        }
+                    });
+                }
+            }
 
             // If guest or viewer, only show published documents
             if (!$user || $user->isUser()) {
@@ -34,20 +53,38 @@ class FolderController extends Controller
             }
         } else {
             // Root View
-            if (!$user || $user->isSuperAdmin() || $user->isUser()) {
+            if (!$user || $user->isSuperAdmin()) {
                 $subfolders = Folder::whereNull('parent_id')->orderBy('name')->get();
+                $documentsQuery = Document::whereNull('folder_id')->with(['category', 'latestVersion', 'creator']);
             } else {
-                $subfolders = Folder::whereNull('parent_id')
-                    ->where('department', $user->department)
+                $allRootFolders = Folder::whereNull('parent_id')
+                    ->with('children')
                     ->orderBy('name')
                     ->get();
+
+                $subfolders = $allRootFolders->filter(function ($rf) use ($user) {
+                    return $rf->canAccess($user);
+                })->values();
+
+                $aliases = $user->getDepartmentAliases();
+                $documentsQuery = Document::whereNull('folder_id')
+                    ->with(['category', 'latestVersion', 'creator'])
+                    ->where(function ($q) use ($aliases, $user) {
+                        $q->where(function ($dq) use ($aliases) {
+                            foreach ($aliases as $alias) {
+                                $dq->orWhere('department', $alias);
+                            }
+                        })
+                        ->orWhere(function ($sq) use ($aliases) {
+                            foreach ($aliases as $alias) {
+                                $sq->orWhere('shared_departments', 'like', '%"' . $alias . '"%');
+                            }
+                        });
+                    });
             }
 
-            $documentsQuery = Document::whereNull('folder_id')->with(['category', 'latestVersion', 'creator']);
             if (!$user || $user->isUser()) {
                 $documentsQuery->forViewer();
-            } elseif (!$user->isSuperAdmin() && $user->department) {
-                $documentsQuery->where('department', $user->department);
             }
         }
 
@@ -65,21 +102,24 @@ class FolderController extends Controller
         $categories = Category::where('is_active', true)->orderBy('name')->get();
 
         // 1. Folder Tree Hierarchy for Left Navigation Pane (Explorer Style)
-        if (!$user || $user->isSuperAdmin() || $user->isUser()) {
+        if (!$user || $user->isSuperAdmin()) {
             $folderTree = Folder::whereNull('parent_id')
                 ->with(['children' => function ($q) {
-                    $q->orderBy('name')->with('children');
+                    $q->orderBy('name')->with('children.children');
                 }])
                 ->orderBy('name')
                 ->get();
         } else {
-            $folderTree = Folder::whereNull('parent_id')
-                ->where('department', $user->department)
+            $allRoots = Folder::whereNull('parent_id')
                 ->with(['children' => function ($q) {
-                    $q->orderBy('name')->with('children');
+                    $q->orderBy('name')->with('children.children');
                 }])
                 ->orderBy('name')
                 ->get();
+
+            $folderTree = $allRoots->filter(function ($rf) use ($user) {
+                return $rf->canAccess($user);
+            })->values();
         }
 
         // 2. Get all accessible folders for "Move Document" dropdown
@@ -88,7 +128,9 @@ class FolderController extends Controller
             if ($user->isSuperAdmin()) {
                 $allAccessibleFolders = Folder::orderBy('name')->get();
             } else {
-                $allAccessibleFolders = Folder::accessible($user)->orderBy('name')->get();
+                $allAccessibleFolders = Folder::orderBy('name')->get()->filter(function ($f) use ($user) {
+                    return $f->canManage($user);
+                })->values();
             }
         }
 
@@ -118,7 +160,7 @@ class FolderController extends Controller
 
         if (!empty($validated['parent_id'])) {
             $parent = Folder::findOrFail($validated['parent_id']);
-            abort_unless($parent->canAccess($user), 403, 'Akses ditolak ke folder induk.');
+            abort_unless($parent->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat membuat subfolder di folder ini.');
             $department = $department ?: $parent->getEffectiveDepartment();
         } else {
             if (!$user->isSuperAdmin()) {
@@ -291,7 +333,7 @@ class FolderController extends Controller
         $folderId = $request->folder_id ?? ($folder ? $folder->id : null);
         $targetFolder = $folderId ? Folder::find($folderId) : null;
         if ($targetFolder) {
-            abort_unless($targetFolder->canAccess($user), 403);
+            abort_unless($targetFolder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat mengunggah berkas ke folder ini.');
             $department = $targetFolder->getEffectiveDepartment();
         } else {
             $department = $user->department;

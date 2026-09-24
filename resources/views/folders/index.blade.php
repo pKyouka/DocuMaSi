@@ -659,6 +659,7 @@
                     </button>
                 </div>
 
+                @if(!$currentFolder || $currentFolder->canManage(auth()->user()))
                 <!-- Create Folder Button -->
                 <button @click="createFolderModal = true" class="inline-flex items-center px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-xs font-semibold text-white shadow-sm transition-colors">
                     <svg class="w-3.5 h-3.5 mr-1.5 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
@@ -696,6 +697,7 @@
                         </a>
                     </div>
                 </div>
+                @endif
 
                 <!-- User Dropdown (Alpine.js) -->
                 <div class="relative ml-2" x-data="{ userMenu: false }">
@@ -774,6 +776,9 @@
                 <div class="shrink-0 text-[11px] text-gray-600 bg-[#002147]/5 px-2.5 py-1 rounded-full border border-[#002147]/10 flex items-center gap-1.5">
                     <span class="w-1.5 h-1.5 rounded-full bg-[#f1b500]"></span>
                     <span>Unit:</span> <span class="font-bold text-[#002147]">{{ $currentFolder->getEffectiveDepartment() }}</span>
+                    @if($currentFolder->isSharedFromOtherDepartment(auth()->user()))
+                        <span class="ms-1 text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">Dibagikan</span>
+                    @endif
                 </div>
             @endif
         </div>
@@ -797,12 +802,16 @@
 
                     <!-- Tree Items -->
                     @foreach($folderTree as $rf)
+                    @php
+                        $rfAccessibleChildren = $rf->getAccessibleChildren(auth()->user());
+                        $isRfShared = $rf->isSharedFromOtherDepartment(auth()->user());
+                    @endphp
                     <div class="space-y-0.5" x-data="{ expanded: {{ ($currentFolder && ($currentFolder->id == $rf->id || $currentFolder->getEffectiveDepartment() == $rf->department)) ? 'true' : 'false' }} }">
                         <div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-xs {{ ($currentFolder && $currentFolder->id == $rf->id) ? 'bg-[#002147] text-white font-bold shadow-sm' : 'text-gray-700 hover:bg-slate-100 hover:text-[#002147]' }} transition-colors group cursor-pointer"
                              @dragover="onFolderDragOver($event, {{ $rf->id }})"
                              @dragleave="onFolderDragLeave($event, {{ $rf->id }})"
                              @drop="onFolderDrop($event, {{ $rf->id }})"
-                             @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $rf->id }}, name: '{{ addslashes($rf->name) }}', department: '{{ addslashes($rf->department ?? 'Umum') }}', shared_departments: {{ json_encode($rf->shared_departments ?? []) }}, url: '{{ route('folders.index', ['folder_id' => $rf->id]) }}' })"
+                             @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $rf->id }}, name: '{{ addslashes($rf->name) }}', department: '{{ addslashes($rf->department ?? 'Umum') }}', shared_departments: {{ json_encode($rf->shared_departments ?? []) }}, can_manage: {{ $rf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $rf->id]) }}' })"
                              :class="hoveredFolderId == {{ $rf->id }} ? 'ring-2 ring-[#f1b500] bg-amber-50' : ''">
                             
                             <a href="{{ route('folders.index', ['folder_id' => $rf->id]) }}" class="flex items-center min-w-0 flex-1 truncate">
@@ -810,7 +819,11 @@
                                 <span class="truncate">{{ $rf->name }}</span>
                             </a>
 
-                            @if($rf->children->isNotEmpty())
+                            @if($isRfShared)
+                                <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-[#f1b500] font-bold mr-1 shrink-0">Shared</span>
+                            @endif
+
+                            @if($rfAccessibleChildren->isNotEmpty())
                                 <button @click="expanded = !expanded" class="p-0.5 text-gray-400 hover:text-gray-700">
                                     <svg class="w-3.5 h-3.5 transform transition-transform" :class="expanded ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                                 </button>
@@ -818,14 +831,14 @@
                         </div>
 
                         <!-- Subfolder Tree level 1 -->
-                        @if($rf->children->isNotEmpty())
+                        @if($rfAccessibleChildren->isNotEmpty())
                         <div x-show="expanded" x-collapse class="pl-4 space-y-0.5">
-                            @foreach($rf->children as $cf)
+                            @foreach($rfAccessibleChildren as $cf)
                             <div class="flex items-center px-2 py-1 rounded-md text-xs {{ ($currentFolder && $currentFolder->id == $cf->id) ? 'bg-[#002147] text-white font-bold' : 'text-gray-600 hover:bg-slate-100 hover:text-[#002147]' }} transition-colors cursor-pointer"
                                  @dragover="onFolderDragOver($event, {{ $cf->id }})"
                                  @dragleave="onFolderDragLeave($event, {{ $cf->id }})"
                                  @drop="onFolderDrop($event, {{ $cf->id }})"
-                                 @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $cf->id }}, name: '{{ addslashes($cf->name) }}', department: '{{ addslashes($cf->department ?? 'Umum') }}', shared_departments: {{ json_encode($cf->shared_departments ?? []) }}, url: '{{ route('folders.index', ['folder_id' => $cf->id]) }}' })"
+                                 @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $cf->id }}, name: '{{ addslashes($cf->name) }}', department: '{{ addslashes($cf->department ?? 'Umum') }}', shared_departments: {{ json_encode($cf->shared_departments ?? []) }}, can_manage: {{ $cf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $cf->id]) }}' })"
                                  :class="hoveredFolderId == {{ $cf->id }} ? 'ring-2 ring-[#f1b500] bg-amber-50' : ''">
                                 <a href="{{ route('folders.index', ['folder_id' => $cf->id]) }}" class="flex items-center min-w-0 flex-1 truncate">
                                     <svg class="w-3 h-3 mr-1.5 text-[#f1b500] shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
@@ -882,7 +895,12 @@
                                             <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
                                         </div>
                                         <div class="min-w-0">
-                                            <h4 class="text-xs font-bold text-gray-800 truncate group-hover:text-[#002147] transition-colors">{{ $sf->name }}</h4>
+                                            <div class="flex items-center gap-1.5">
+                                                <h4 class="text-xs font-bold text-gray-800 truncate group-hover:text-[#002147] transition-colors">{{ $sf->name }}</h4>
+                                                @if($sf->isSharedFromOtherDepartment(auth()->user()))
+                                                    <span class="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded shrink-0">Dibagikan</span>
+                                                @endif
+                                            </div>
                                             <p class="text-[10px] text-gray-400 truncate">{{ $sf->department ?? 'Umum' }}</p>
                                         </div>
                                     </a>
@@ -893,10 +911,11 @@
                                             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
                                         </button>
                                         <div x-show="open" @click.outside="open = false" class="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-20 text-xs" style="display: none;">
-                                            <button @click="openShare('folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' }); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
+                                            <button @click="openShare('folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, can_manage: {{ $sf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' }); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
                                                 <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
                                                 Bagikan Folder
                                             </button>
+                                            @if($sf->canManage(auth()->user()))
                                             <button @click="openRenameFolder({{ $sf->id }}, '{{ addslashes($sf->name) }}'); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
                                                 <svg class="w-3.5 h-3.5 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                                 Ubah Nama
@@ -909,6 +928,7 @@
                                                     Hapus
                                                 </button>
                                             </form>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
@@ -948,6 +968,12 @@
                                         'jpg', 'jpeg', 'png' => 'text-purple-500 bg-purple-50',
                                         default => 'text-gray-500 bg-gray-100'
                                     };
+                                    $canManageDoc = auth()->check() && (
+                                        auth()->user()->isSuperAdmin() ||
+                                        $doc->created_by === auth()->id() ||
+                                        ($doc->department && auth()->user()->matchesDepartment($doc->department))
+                                    );
+                                    $isDocShared = $doc->isSharedFromOtherDepartment(auth()->user());
                                     $docPayload = [
                                         'id' => $doc->id,
                                         'uuid' => $doc->uuid,
@@ -964,7 +990,9 @@
                                         'description' => $doc->description ?? 'Tidak ada deskripsi.',
                                         'preview_url' => route('documents.preview', $doc),
                                         'download_url' => route('documents.download', $doc),
-                                        'edit_url' => auth()->check() ? route('documents.edit', $doc) : null,
+                                        'edit_url' => $canManageDoc ? route('documents.edit', $doc) : null,
+                                        'can_manage' => $canManageDoc,
+                                        'is_shared' => $isDocShared,
                                     ];
                                 @endphp
                                 <div draggable="{{ auth()->check() ? 'true' : 'false' }}" 
@@ -1056,9 +1084,14 @@
                                             @else
                                                 <svg class="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                                             @endif
-                                            <h4 class="text-xs font-semibold text-gray-900 truncate group-hover:text-[#002147] transition-colors flex-1" title="{{ $doc->name }}">
-                                                {{ $doc->name }}
-                                            </h4>
+                                            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                                                <h4 class="text-xs font-semibold text-gray-900 truncate group-hover:text-[#002147] transition-colors" title="{{ $doc->name }}">
+                                                    {{ $doc->name }}
+                                                </h4>
+                                                @if($isDocShared)
+                                                    <span class="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded shrink-0">Dibagikan</span>
+                                                @endif
+                                            </div>
                                         </div>
 
                                         <p class="text-[10px] text-gray-400 truncate">
@@ -1105,6 +1138,12 @@
                                     <tbody class="bg-white divide-y divide-gray-100">
                                         @forelse($documents as $doc)
                                         @php
+                                            $canManageDoc = auth()->check() && (
+                                                auth()->user()->isSuperAdmin() ||
+                                                $doc->created_by === auth()->id() ||
+                                                ($doc->department && auth()->user()->matchesDepartment($doc->department))
+                                            );
+                                            $isDocShared = $doc->isSharedFromOtherDepartment(auth()->user());
                                             $docPayload = [
                                                 'id' => $doc->id,
                                                 'uuid' => $doc->uuid,
@@ -1121,7 +1160,9 @@
                                                 'description' => $doc->description ?? 'Tidak ada deskripsi.',
                                                 'preview_url' => route('documents.preview', $doc),
                                                 'download_url' => route('documents.download', $doc),
-                                                'edit_url' => auth()->check() ? route('documents.edit', $doc) : null,
+                                                'edit_url' => $canManageDoc ? route('documents.edit', $doc) : null,
+                                                'can_manage' => $canManageDoc,
+                                                'is_shared' => $isDocShared,
                                             ];
                                         @endphp
                                         <tr draggable="{{ auth()->check() ? 'true' : 'false' }}"
@@ -1133,6 +1174,9 @@
                                             <td class="px-5 py-3 text-xs font-semibold text-gray-900 flex items-center">
                                                 <svg class="w-4 h-4 mr-2 text-[#002147] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                                                 <span class="truncate">{{ $doc->name }}</span>
+                                                @if($isDocShared)
+                                                    <span class="ms-2 text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded shrink-0">Dibagikan</span>
+                                                @endif
                                             </td>
                                             <td class="px-5 py-3 text-xs text-gray-600">{{ $doc->category->name ?? '-' }}</td>
                                             <td class="px-5 py-3 text-xs">
@@ -1254,9 +1298,11 @@
                                 <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 Unduh Berkas
                             </a>
-                            <a :href="activeDoc.edit_url" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[#002147] hover:bg-[#002147]/5 rounded-lg font-semibold transition-colors">
-                                Edit Metadata
-                            </a>
+                            <template x-if="activeDoc.can_manage && activeDoc.edit_url">
+                                <a :href="activeDoc.edit_url" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[#002147] hover:bg-[#002147]/5 rounded-lg font-semibold transition-colors">
+                                    Edit Metadata
+                                </a>
+                            </template>
                         </div>
                     </div>
                 </template>
@@ -1387,6 +1433,7 @@
                     </div>
 
                     @auth
+                    <template x-if="contextMenu.item.can_manage">
                     <div class="py-1">
                         <button @click="openRenameFolder(contextMenu.item.id, contextMenu.item.name); closeContextMenu();" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
                             <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -1402,6 +1449,7 @@
                             </button>
                         </form>
                     </div>
+                    </template>
                     @endauth
                 </div>
             </template>
@@ -1434,6 +1482,7 @@
                     </div>
 
                     @auth
+                    <template x-if="contextMenu.item.can_manage">
                     <div class="py-1">
                         @if(auth()->check() && auth()->user()->isAdmin())
                         <button @click="openEditDateModal(contextMenu.item)" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2.5 transition-colors">
@@ -1463,6 +1512,7 @@
                             </button>
                         </form>
                     </div>
+                    </template>
                     @endauth
                 </div>
             </template>

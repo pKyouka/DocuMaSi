@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="C:\Users\Ryumyaku\Documents\Project\DocuMaSi\phpunit.xml" tests="1" assertions="2" errors="0" failures="0" skipped="0" time="0.338793">
+    <testsuite name="Feature" tests="1" assertions="2" errors="0" failures="0" skipped="0" time="0.338793">
+      <testsuite name="Tests\Feature\ExplorerTest" file="C:\Users\Ryumyaku\Documents\Project\DocuMaSi\tests\Feature\ExplorerTest.php" tests="1" assertions="2" errors="0" failures="0" skipped="0" time="0.338793">
+        <testcase name="test_biro_access_control_on_shared_document" file="C:\Users\Ryumyaku\Documents\Project\DocuMaSi\tests\Feature\ExplorerTest.php" line="311" class="Tests\Feature\ExplorerTest" classname="Tests.Feature.ExplorerTest" assertions="2" time="0.338793"/>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

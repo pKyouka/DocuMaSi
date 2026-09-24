@@ -90,7 +90,7 @@ class Folder extends Model
         return [];
     }
 
-    public function canAccess(?User $user): bool
+    public function isDirectlyAccessibleBy(?User $user): bool
     {
         if (!$user) {
             return false;
@@ -101,30 +101,97 @@ class Folder extends Model
         }
 
         $effectiveDept = $this->getEffectiveDepartment();
-        if ($effectiveDept && (
-            $effectiveDept === $user->department ||
-            ($effectiveDept === 'PSTI' && $user->department === 'Program Studi PSTI') ||
-            ($effectiveDept === 'Program Studi PSTI' && $user->department === 'PSTI')
-        )) {
+        if ($effectiveDept && $user->matchesDepartment($effectiveDept)) {
             return true;
         }
 
         $sharedDepts = $this->getEffectiveSharedDepartments();
-        if (!empty($sharedDepts)) {
-            $userDepts = array_filter([
-                $user->department,
-                $user->department === 'PSTI' ? 'Program Studi PSTI' : null,
-                $user->department === 'Program Studi PSTI' ? 'PSTI' : null,
-            ]);
-            return !empty(array_intersect($userDepts, $sharedDepts));
+        if (!empty($sharedDepts) && $user->isDepartmentSharedWith($sharedDepts)) {
+            return true;
         }
 
-        // If no department is set on folder, general access
-        if (empty($effectiveDept)) {
+        if (empty($effectiveDept) && empty($sharedDepts)) {
             return true;
         }
 
         return false;
+    }
+
+    public function hasDirectSharedDocumentsFor(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        $aliases = $user->getDepartmentAliases();
+        if (empty($aliases)) {
+            return false;
+        }
+
+        return $this->documents()
+            ->where(function ($q) use ($aliases, $user) {
+                $q->where('created_by', $user->id);
+                foreach ($aliases as $alias) {
+                    $q->orWhere('shared_departments', 'like', '%"' . $alias . '"%');
+                }
+            })
+            ->exists();
+    }
+
+    public function containsSharedItemsFor(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($this->hasDirectSharedDocumentsFor($user)) {
+            return true;
+        }
+
+        foreach ($this->children as $child) {
+            if ($child->isDirectlyAccessibleBy($user) || $child->containsSharedItemsFor($user)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function canAccess(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($this->isDirectlyAccessibleBy($user)) {
+            return true;
+        }
+
+        return $this->containsSharedItemsFor($user);
+    }
+
+    public function isSharedFromOtherDepartment(?User $user): bool
+    {
+        if (!$user || $user->isSuperAdmin()) {
+            return false;
+        }
+        $effectiveDept = $this->getEffectiveDepartment();
+        return $effectiveDept && !$user->matchesDepartment($effectiveDept);
+    }
+
+    public function getAccessibleChildren(?User $user)
+    {
+        if (!$user || $user->isSuperAdmin()) {
+            return $this->children;
+        }
+
+        if ($user->matchesDepartment($this->getEffectiveDepartment())) {
+            return $this->children;
+        }
+
+        return $this->children->filter(function ($child) use ($user) {
+            return $child->canAccess($user);
+        })->values();
     }
 
     public function canManage(?User $user): bool
@@ -137,11 +204,13 @@ class Folder extends Model
             return true;
         }
 
+        if ($this->created_by === $user->id) {
+            return true;
+        }
+
         if ($user->isAdmin()) {
             $effectiveDept = $this->getEffectiveDepartment();
-            return $effectiveDept === $user->department ||
-                ($effectiveDept === 'PSTI' && $user->department === 'Program Studi PSTI') ||
-                ($effectiveDept === 'Program Studi PSTI' && $user->department === 'PSTI');
+            return $effectiveDept && $user->matchesDepartment($effectiveDept);
         }
 
         return false;

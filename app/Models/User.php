@@ -110,6 +110,36 @@ class User extends Authenticatable
         return $this->isSuperAdmin();
     }
 
+    public function getDepartmentAliases(): array
+    {
+        if (!$this->department) {
+            return [];
+        }
+        $aliases = [$this->department];
+        if ($this->department === 'PSTI') {
+            $aliases[] = 'Program Studi PSTI';
+        } elseif ($this->department === 'Program Studi PSTI') {
+            $aliases[] = 'PSTI';
+        }
+        return array_unique($aliases);
+    }
+
+    public function matchesDepartment(?string $dept): bool
+    {
+        if (!$dept || !$this->department) {
+            return false;
+        }
+        return in_array($dept, $this->getDepartmentAliases());
+    }
+
+    public function isDepartmentSharedWith(?array $sharedDepts): bool
+    {
+        if (empty($sharedDepts)) {
+            return false;
+        }
+        return !empty(array_intersect($this->getDepartmentAliases(), $sharedDepts));
+    }
+
     public function canApproveDocuments(): bool
     {
         return $this->isAdmin();

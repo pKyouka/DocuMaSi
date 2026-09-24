@@ -394,4 +394,152 @@ class ExplorerTest extends TestCase
         // actual_uploaded_at tetap utuh untuk audit
         $this->assertEquals($actualUploadedAt->toDateTimeString(), $document->actual_uploaded_at->toDateTimeString());
     }
+
+    public function test_shared_folder_inherits_to_child_folders_and_files_and_appears_in_sidebar_for_target_biro(): void
+    {
+        $adminPsti = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'PSTI',
+        ]);
+
+        $adminAkademik = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Biro Akademik',
+        ]);
+
+        $adminHumas = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Biro Humas dan Protokol',
+        ]);
+
+        $category = Category::create([
+            'name' => 'Akreditasi',
+            'slug' => 'akreditasi-test',
+            'is_active' => true,
+        ]);
+
+        // Root folder PSTI
+        $pstiRoot = Folder::create([
+            'name' => 'Folder PSTI Khusus',
+            'department' => 'PSTI',
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // Subfolder Akreditasi yang DIBAGIKAN ke Biro Akademik
+        $subAkreditasi = Folder::create([
+            'name' => 'Akreditasi PSTI',
+            'parent_id' => $pstiRoot->id,
+            'department' => 'PSTI',
+            'shared_departments' => ['Biro Akademik'],
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // File di dalam Akreditasi (mewarisi izin folder)
+        $doc = Document::create([
+            'name' => 'Borang Akreditasi 2026',
+            'category_id' => $category->id,
+            'folder_id' => $subAkreditasi->id,
+            'department' => 'PSTI',
+            'document_date' => now()->toDateString(),
+            'display_date' => now()->toDateString(),
+            'upload_date' => now()->toDateString(),
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // Biro Akademik melihat PSTI di root dan tree
+        $responseAkademik = $this->actingAs($adminAkademik)->get('/folders');
+        $responseAkademik->assertStatus(200);
+        $responseAkademik->assertSee('Folder PSTI Khusus');
+
+        // Biro Akademik bisa membuka subfolder Akreditasi dan melihat borang (warisan akses)
+        $responseSubfolder = $this->actingAs($adminAkademik)->get("/folders?folder_id={$subAkreditasi->id}");
+        $responseSubfolder->assertStatus(200);
+        $responseSubfolder->assertSee('Borang Akreditasi 2026');
+
+        // Biro Humas (tidak dibagikan) TIDAK melihat PSTI di root
+        $responseHumas = $this->actingAs($adminHumas)->get('/folders');
+        $responseHumas->assertStatus(200);
+        $responseHumas->assertDontSee('Folder PSTI Khusus');
+        $responseHumas->assertDontSee('Akreditasi PSTI');
+
+        // Biro Humas ditolak saat membuka folder Akreditasi
+        $responseHumasForbidden = $this->actingAs($adminHumas)->get("/folders?folder_id={$subAkreditasi->id}");
+        $responseHumasForbidden->assertStatus(403);
+    }
+
+    public function test_shared_single_file_shows_folder_hierarchy_but_only_shows_shared_file_inside(): void
+    {
+        $adminPsti = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'PSTI',
+        ]);
+
+        $adminAkademik = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Biro Akademik',
+        ]);
+
+        $category = Category::create([
+            'name' => 'Kurikulum',
+            'slug' => 'kurikulum-test',
+            'is_active' => true,
+        ]);
+
+        // Root PSTI
+        $pstiRoot = Folder::create([
+            'name' => 'Program Studi PSTI',
+            'department' => 'PSTI',
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // Subfolder Kurikulum (Folder ini TIDAK dibagikan secara utuh)
+        $subKurikulum = Folder::create([
+            'name' => 'Kurikulum',
+            'parent_id' => $pstiRoot->id,
+            'department' => 'PSTI',
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // File 1: DIBAGIKAN ke Biro Akademik
+        $docShared = Document::create([
+            'name' => 'Pedoman Kurikulum 2026 (Shared)',
+            'category_id' => $category->id,
+            'folder_id' => $subKurikulum->id,
+            'department' => 'PSTI',
+            'document_date' => now()->toDateString(),
+            'display_date' => now()->toDateString(),
+            'upload_date' => now()->toDateString(),
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'shared_departments' => ['Biro Akademik'],
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // File 2: TIDAK dibagikan (internal PSTI)
+        $docPrivate = Document::create([
+            'name' => 'Draft Rahasia Kurikulum (Private)',
+            'category_id' => $category->id,
+            'folder_id' => $subKurikulum->id,
+            'department' => 'PSTI',
+            'document_date' => now()->toDateString(),
+            'display_date' => now()->toDateString(),
+            'upload_date' => now()->toDateString(),
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'shared_departments' => null,
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // Biro Akademik melihat PSTI di root dan bisa navigasi ke Kurikulum
+        $responseRoot = $this->actingAs($adminAkademik)->get('/folders');
+        $responseRoot->assertStatus(200);
+        $responseRoot->assertSee('Program Studi PSTI');
+
+        // Buka folder Kurikulum
+        $responseFolder = $this->actingAs($adminAkademik)->get("/folders?folder_id={$subKurikulum->id}");
+        $responseFolder->assertStatus(200);
+
+        // HANYA File 1 yang tampil! File 2 TIDAK tampil!
+        $responseFolder->assertSee('Pedoman Kurikulum 2026 (Shared)');
+        $responseFolder->assertDontSee('Draft Rahasia Kurikulum (Private)');
+    }
 }
