@@ -28,8 +28,16 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Role / Hak Akses <span class="text-red-500">*</span></label>
+                            @php
+                                $roles = auth()->user()->isSuperAdmin()
+                                    ? \App\Models\User::ROLES
+                                    : [
+                                        \App\Models\User::ROLE_ADMIN => 'Admin Unit / Prodi',
+                                        \App\Models\User::ROLE_USER => 'Staf / Pengguna Unit',
+                                    ];
+                            @endphp
                             <select name="role" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" {{ $user->id === auth()->id() && $user->isSuperAdmin() ? 'disabled' : '' }}>
-                                @foreach(\App\Models\User::ROLES as $val => $label)
+                                @foreach($roles as $val => $label)
                                     <option value="{{ $val }}" {{ old('role', $user->role) == $val ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
@@ -57,14 +65,19 @@
 
                         <div class="md:col-span-2 pt-4 border-t border-gray-100">
                             <label class="block text-sm font-medium text-gray-700">Unit (Biro / Jurusan / Prodi)</label>
-                            <select name="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                <option value="">Pusat / Umum</option>
-                                @foreach(\App\Models\User::UNITS as $unit)
-                                    <option value="{{ $unit === 'Program Studi PSTI' ? 'PSTI' : $unit }}" {{ old('department', $user->department) == ($unit === 'Program Studi PSTI' ? 'PSTI' : $unit) ? 'selected' : '' }}>
-                                        {{ $unit }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            @if(auth()->user()->isSuperAdmin())
+                                <select name="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <option value="">Pusat / Umum</option>
+                                    @foreach(\App\Models\User::UNITS as $unit)
+                                        <option value="{{ $unit }}" {{ old('department', $user->department) == $unit ? 'selected' : '' }}>
+                                            {{ $unit }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <input type="text" readonly value="{{ $user->department }}" class="mt-1 block w-full rounded-md border-gray-200 bg-gray-100 text-gray-700 shadow-sm sm:text-sm cursor-not-allowed">
+                                <input type="hidden" name="department" value="{{ $user->department }}">
+                            @endif
                             @error('department') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
 

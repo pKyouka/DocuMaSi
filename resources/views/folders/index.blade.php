@@ -651,7 +651,7 @@
                         File Explorer
                     </a>
                     <a href="{{ route('google-drive.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('google-drive.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors flex items-center gap-1.5">
-                        <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                        <x-google-drive-icon class="w-3.5 h-3.5 shrink-0" />
                         Google Drive
                     </a>
                 </nav>
@@ -706,7 +706,7 @@
                             <span>Form Lengkap &amp; Metadata</span>
                         </a>
                         <a href="{{ route('google-drive.index') }}" class="w-full text-left px-3.5 py-2 text-blue-700 hover:bg-[#002147]/5 hover:text-[#002147] flex items-center gap-2 border-t border-gray-100 font-semibold">
-                            <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                            <x-google-drive-icon class="w-4 h-4 shrink-0" />
                             <span>Impor dari Google Drive</span>
                         </a>
                     </div>
@@ -733,11 +733,11 @@
                         </div>
 
                         <a href="{{ route('google-drive.index') }}" class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
-                            <svg class="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                            <x-google-drive-icon class="w-4 h-4 mr-2 shrink-0" />
                             Google Drive (Cloud)
                         </a>
 
-                        @if(auth()->user()->isSuperAdmin())
+                        @if(auth()->user()->canManageUsers())
                         <a href="{{ route('users.index') }}" class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
                             <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                             Kelola Pengguna
@@ -820,8 +820,8 @@
                     </a>
 
                     <!-- Google Drive Cloud Shortcut -->
-                    <a href="{{ route('google-drive.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900 transition-colors">
-                        <svg class="w-4 h-4 mr-2 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                    <a href="{{ route('google-drive.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
+                        <x-google-drive-icon class="w-4 h-4 mr-2 shrink-0" />
                         <span>Google Drive (Cloud)</span>
                     </a>
 
@@ -915,7 +915,7 @@
                                  @dragover="onFolderDragOver($event, {{ $sf->id }})"
                                  @dragleave="onFolderDragLeave($event, {{ $sf->id }})"
                                  @drop="onFolderDrop($event, {{ $sf->id }})"
-                                 @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' })"
+                                 @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, can_manage: {{ $sf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' })"
                                  :class="hoveredFolderId == {{ $sf->id }} ? 'ring-2 ring-[#f1b500] bg-amber-50/40 scale-105 transition-transform' : ''">
 
                                 <div class="flex items-start justify-between">
@@ -940,11 +940,11 @@
                                             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
                                         </button>
                                         <div x-show="open" @click.outside="open = false" class="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-20 text-xs" style="display: none;">
-                                            <button @click="openShare('folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, can_manage: {{ $sf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' }); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
+                                            @if($sf->canManage(auth()->user()))
+                                            <button @click="openShare('folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, can_manage: true, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' }); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
                                                 <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
                                                 Bagikan Folder
                                             </button>
-                                            @if($sf->canManage(auth()->user()))
                                             <button @click="openRenameFolder({{ $sf->id }}, '{{ addslashes($sf->name) }}'); open = false" class="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center">
                                                 <svg class="w-3.5 h-3.5 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                                 Ubah Nama
@@ -957,6 +957,11 @@
                                                     Hapus
                                                 </button>
                                             </form>
+                                            @else
+                                            <div class="px-3 py-1.5 text-gray-400 italic text-[11px] flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                                <span>Read Only</span>
+                                            </div>
                                             @endif
                                         </div>
                                     </div>
@@ -1131,9 +1136,13 @@
                                         <div class="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
                                             <span>v{{ $doc->current_version }} &bull; {{ $doc->latestVersion ? $doc->latestVersion->file_size_formatted : '' }}</span>
                                             <div class="flex items-center gap-1.5">
+                                                @if($canManageDoc)
                                                 <button @click.stop="openShare('document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-emerald-600 p-1 rounded-md hover:bg-emerald-50 transition-colors" title="Bagikan Dokumen">
                                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
                                                 </button>
+                                                @else
+                                                <span class="text-[9px] text-gray-400 italic bg-gray-50 px-1 py-0.2 rounded border border-gray-100">Read Only</span>
+                                                @endif
                                                 <button @click.stop="openContextMenu($event, 'document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-gray-700 p-1 rounded-md hover:bg-gray-100 transition-colors">
                                                     <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
                                                 </button>
@@ -1216,6 +1225,7 @@
                                             <td class="px-5 py-3 text-xs text-gray-600">{{ $doc->effective_display_date ? $doc->effective_display_date->format('d M Y') : '-' }}</td>
                                             <td class="px-5 py-3 text-xs text-right whitespace-nowrap">
                                                 <div class="flex items-center justify-end gap-1">
+                                                    @if($canManageDoc)
                                                     <button @click.stop="openShare('document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-emerald-600 p-1 rounded hover:bg-gray-100" title="Bagikan">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
                                                     </button>
@@ -1224,6 +1234,9 @@
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
                                                     </button>
                                                     @endauth
+                                                    @else
+                                                    <span class="text-[10px] text-gray-400 italic px-2 py-0.5 rounded bg-gray-50 border border-gray-100">Read Only</span>
+                                                    @endif
                                                 </div>
                                             </td>
                                         </tr>
@@ -1315,10 +1328,17 @@
 
                         <!-- Action Buttons in Inspector -->
                         <div class="pt-2 space-y-2">
-                            <button @click="openShare('document', activeDoc)" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#f1b500] hover:bg-[#e5a800] text-[#002147] rounded-lg font-bold transition-colors shadow-xs">
-                                <svg class="w-3.5 h-3.5 text-[#002147]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                                Bagikan Dokumen...
-                            </button>
+                            <template x-if="activeDoc.can_manage">
+                                <button @click="openShare('document', activeDoc)" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#f1b500] hover:bg-[#e5a800] text-[#002147] rounded-lg font-bold transition-colors shadow-xs">
+                                    <svg class="w-3.5 h-3.5 text-[#002147]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                                    Bagikan Dokumen...
+                                </button>
+                            </template>
+                            <template x-if="!activeDoc.can_manage">
+                                <div class="p-2 text-center text-xs bg-amber-50 text-amber-800 rounded-lg border border-amber-200 font-medium">
+                                    Dokumen milik <span class="font-bold" x-text="activeDoc.department"></span> (Hanya Baca / Read Only)
+                                </div>
+                            </template>
                             <a :href="activeDoc.preview_url" target="_blank" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#002147] hover:bg-[#001733] text-white rounded-lg font-semibold transition-colors shadow-xs">
                                 <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                 Pratinjau Dokumen
@@ -1361,7 +1381,7 @@
                                 <select name="department" class="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                                     <option value="">Umum / Tanpa Unit</option>
                                     @foreach(\App\Models\User::UNITS as $unit)
-                                        <option value="{{ $unit === 'Program Studi PSTI' ? 'PSTI' : $unit }}">{{ $unit }}</option>
+                                        <option value="{{ $unit }}">{{ $unit }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -1455,10 +1475,19 @@
                             <span>Buka Folder</span>
                         </a>
 
-                        <button @click="openShare('folder', contextMenu.item)" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                            <span>Bagikan Folder...</span>
-                        </button>
+                        <template x-if="contextMenu.item.can_manage">
+                            <button @click="openShare('folder', contextMenu.item)" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                                <span>Bagikan Folder...</span>
+                            </button>
+                        </template>
+
+                        <template x-if="!contextMenu.item.can_manage">
+                            <div class="px-3.5 py-1.5 text-amber-800 bg-amber-50 text-[11px] italic flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                <span>Folder Dibagikan (Read Only)</span>
+                            </div>
+                        </template>
                     </div>
 
                     @auth
@@ -1497,10 +1526,19 @@
                             <span>Pratinjau (Preview)</span>
                         </a>
 
-                        <button @click="openShare('document', contextMenu.item)" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                            <span>Bagikan Dokumen...</span>
-                        </button>
+                        <template x-if="contextMenu.item.can_manage">
+                            <button @click="openShare('document', contextMenu.item)" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                                <span>Bagikan Dokumen...</span>
+                            </button>
+                        </template>
+
+                        <template x-if="!contextMenu.item.can_manage">
+                            <div class="px-3.5 py-1.5 text-amber-800 bg-amber-50 text-[11px] italic flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                <span>Dokumen Dibagikan (Read Only)</span>
+                            </div>
+                        </template>
 
                         <template x-if="contextMenu.item.is_downloadable">
                             <a :href="contextMenu.item.download_url" @click="closeContextMenu()" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
@@ -1599,7 +1637,7 @@
                                                    class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 h-4 w-4">
                                             <span class="truncate text-xs" x-text="unit"></span>
                                         </div>
-                                        <template x-if="shareModal.department === unit || (shareModal.department === 'PSTI' && unit === 'Program Studi PSTI')">
+                                        <template x-if="shareModal.department === unit || (shareModal.department === 'PSTI' && (unit === 'Program Studi Teknologi Informasi' || unit === 'Program Studi PSTI')) || (shareModal.department === 'Program Studi Teknologi Informasi' && (unit === 'Program Studi Teknologi Informasi' || unit === 'PSTI'))">
                                             <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">Pemilik</span>
                                         </template>
                                     </label>

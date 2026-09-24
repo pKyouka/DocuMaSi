@@ -35,6 +35,20 @@ class GoogleDriveService
         ], true);
     }
 
+    public static function isExportableGoogleMimeType(?string $mimeType): bool
+    {
+        return in_array($mimeType, [
+            'application/vnd.google-apps.document',
+            'application/vnd.google-apps.spreadsheet',
+            'application/vnd.google-apps.presentation',
+        ], true);
+    }
+
+    public static function canImportOrExport(?string $mimeType): bool
+    {
+        return self::isImportableMimeType($mimeType) || self::isExportableGoogleMimeType($mimeType);
+    }
+
     public function authorizationUrl(string $state): string
     {
         $client = $this->newClient();
@@ -98,6 +112,104 @@ class GoogleDriveService
         return $items;
     }
 
+    public function listContents(User $user, string $folderId = 'root'): array
+    {
+        $drive = $this->driveFor($user);
+        $escaped = str_replace(["\\", "'"], ["\\\\", "\\'"], $folderId);
+        $result = $drive->files->listFiles([
+            'q' => "'{$escaped}' in parents and trashed = false",
+            'spaces' => 'drive',
+            'fields' => 'files(id, name, mimeType, size, modifiedTime, webViewLink)',
+            'pageSize' => 500,
+            'orderBy' => 'folder, name',
+        ]);
+
+        $items = [];
+        foreach ($result->getFiles() as $file) {
+            $isFolder = $file->getMimeType() === self::FOLDER_MIME_TYPE;
+            $items[] = [
+                'id' => $file->getId(),
+                'name' => $file->getName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => (int) ($file->getSize() ?? 0),
+                'modified_time' => $file->getModifiedTime(),
+                'web_view_link' => $file->getWebViewLink(),
+                'is_folder' => $isFolder,
+                'importable' => self::canImportOrExport($file->getMimeType()),
+            ];
+        }
+
+        return $items;
+    }
+
+    public function getFolderDetails(User $user, string $folderId = 'root'): array
+    {
+        if ($folderId === 'root') {
+            return [
+                'id' => 'root',
+                'name' => 'Drive Saya',
+                'parent_id' => null,
+            ];
+        }
+
+        try {
+            $drive = $this->driveFor($user);
+            $folder = $drive->files->get($folderId, ['fields' => 'id, name, parents']);
+            $parents = $folder->getParents() ?? [];
+
+            return [
+                'id' => $folder->getId(),
+                'name' => $folder->getName(),
+                'parent_id' => !empty($parents) ? $parents[0] : 'root',
+            ];
+        } catch (\Throwable) {
+            return [
+                'id' => 'root',
+                'name' => 'Drive Saya',
+                'parent_id' => null,
+            ];
+        }
+    }
+
+    public function getFileStream(User $user, string $fileId): array
+    {
+        $drive = $this->driveFor($user);
+        $file = $drive->files->get($fileId, ['fields' => 'id, name, mimeType, size, webViewLink']);
+        $mime = $file->getMimeType();
+        $name = $file->getName();
+
+        if ($mime === 'application/vnd.google-apps.document') {
+            $response = $drive->files->export($fileId, 'application/pdf', ['alt' => 'media']);
+            $mime = 'application/pdf';
+            if (!str_ends_with(strtolower($name), '.pdf')) {
+                $name .= '.pdf';
+            }
+        } elseif ($mime === 'application/vnd.google-apps.spreadsheet') {
+            $exportMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            $response = $drive->files->export($fileId, $exportMime, ['alt' => 'media']);
+            $mime = $exportMime;
+            if (!str_ends_with(strtolower($name), '.xlsx')) {
+                $name .= '.xlsx';
+            }
+        } elseif ($mime === 'application/vnd.google-apps.presentation') {
+            $response = $drive->files->export($fileId, 'application/pdf', ['alt' => 'media']);
+            $mime = 'application/pdf';
+            if (!str_ends_with(strtolower($name), '.pdf')) {
+                $name .= '.pdf';
+            }
+        } else {
+            $response = $drive->files->get($fileId, ['alt' => 'media']);
+        }
+
+        return [
+            'name' => $name,
+            'mime_type' => $mime,
+            'size' => (int) ($file->getSize() ?? 0),
+            'stream' => $response->getBody(),
+            'web_view_link' => $file->getWebViewLink(),
+        ];
+    }
+
     public function listFolders(User $user): array
     {
         $drive = $this->driveFor($user);
@@ -142,8 +254,10 @@ class GoogleDriveService
                 'name' => $file->getName(),
                 'mime_type' => $file->getMimeType(),
                 'size' => (int) ($file->getSize() ?? 0),
+                'modified_time' => $file->getModifiedTime(),
+                'web_view_link' => $file->getWebViewLink(),
                 'is_folder' => $file->getMimeType() === self::FOLDER_MIME_TYPE,
-                'importable' => self::isImportableMimeType($file->getMimeType()),
+                'importable' => self::canImportOrExport($file->getMimeType()),
             ];
         }
 
@@ -165,25 +279,52 @@ class GoogleDriveService
     {
         $drive = $this->driveFor($user);
         $file = $drive->files->get($fileId, ['fields' => 'id,name,mimeType,size']);
+        $mime = $file->getMimeType();
+        $name = $file->getName();
 
-        if (!self::isImportableMimeType($file->getMimeType())) {
-            throw new RuntimeException('Format Google Docs/Sheets/Slides perlu diekspor terlebih dahulu dan belum didukung.');
+        if ($mime === 'application/vnd.google-apps.document') {
+            $response = $drive->files->export($fileId, 'application/pdf', ['alt' => 'media']);
+            $contents = $response->getBody()->getContents();
+            if (!str_ends_with(strtolower($name), '.pdf')) {
+                $name .= '.pdf';
+            }
+            $mime = 'application/pdf';
+        } elseif ($mime === 'application/vnd.google-apps.spreadsheet') {
+            $exportMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            $response = $drive->files->export($fileId, $exportMime, ['alt' => 'media']);
+            $contents = $response->getBody()->getContents();
+            if (!str_ends_with(strtolower($name), '.xlsx')) {
+                $name .= '.xlsx';
+            }
+            $mime = $exportMime;
+        } elseif ($mime === 'application/vnd.google-apps.presentation') {
+            $response = $drive->files->export($fileId, 'application/pdf', ['alt' => 'media']);
+            $contents = $response->getBody()->getContents();
+            if (!str_ends_with(strtolower($name), '.pdf')) {
+                $name .= '.pdf';
+            }
+            $mime = 'application/pdf';
+        } else {
+            if (!self::isImportableMimeType($mime)) {
+                throw new RuntimeException("Format berkas '{$name}' belum didukung.");
+            }
+
+            if ((int) ($file->getSize() ?? 0) > 20 * 1024 * 1024) {
+                throw new RuntimeException("Ukuran berkas '{$name}' melebihi batas 20 MB.");
+            }
+
+            $response = $drive->files->get($fileId, ['alt' => 'media']);
+            $contents = $response->getBody()->getContents();
         }
 
-        if ((int) ($file->getSize() ?? 0) > 20 * 1024 * 1024) {
-            throw new RuntimeException('Ukuran file melebihi batas impor 20 MB.');
-        }
-
-        $response = $drive->files->get($fileId, ['alt' => 'media']);
-        $contents = $response->getBody()->getContents();
-        $path = 'documents/' . date('Y/m') . '/' . uniqid('drive_', true) . '_' . basename($file->getName());
+        $path = 'documents/' . date('Y/m') . '/' . uniqid('drive_', true) . '_' . basename($name);
         Storage::disk('private')->put($path, $contents);
 
         return [
             'path' => $path,
-            'name' => $file->getName(),
+            'name' => $name,
             'size' => Storage::disk('private')->size($path),
-            'mime_type' => $file->getMimeType(),
+            'mime_type' => $mime,
         ];
     }
 
@@ -219,7 +360,7 @@ class GoogleDriveService
         $client->setClientSecret((string) config('services.google.client_secret'));
         $client->setRedirectUri((string) config('services.google.redirect'));
         $client->setAccessType('offline');
-        $client->setPrompt('consent');
+        $client->setPrompt('select_account consent');
         $client->setScopes([self::READ_ONLY_SCOPE]);
 
         return $client;

@@ -488,8 +488,8 @@ class ExplorerTest extends TestCase
 
         // Root PSTI
         $pstiRoot = Folder::create([
-            'name' => 'Program Studi PSTI',
-            'department' => 'PSTI',
+            'name' => 'Program Studi Teknologi Informasi',
+            'department' => 'Program Studi Teknologi Informasi',
             'created_by' => $adminPsti->id,
         ]);
 
@@ -532,7 +532,7 @@ class ExplorerTest extends TestCase
         // Biro Akademik melihat PSTI di root dan bisa navigasi ke Kurikulum
         $responseRoot = $this->actingAs($adminAkademik)->get('/folders');
         $responseRoot->assertStatus(200);
-        $responseRoot->assertSee('Program Studi PSTI');
+        $responseRoot->assertSee('Program Studi Teknologi Informasi');
 
         // Buka folder Kurikulum
         $responseFolder = $this->actingAs($adminAkademik)->get("/folders?folder_id={$subKurikulum->id}");
@@ -541,5 +541,81 @@ class ExplorerTest extends TestCase
         // HANYA File 1 yang tampil! File 2 TIDAK tampil!
         $responseFolder->assertSee('Pedoman Kurikulum 2026 (Shared)');
         $responseFolder->assertDontSee('Draft Rahasia Kurikulum (Private)');
+    }
+
+    public function test_recipient_biro_has_read_only_access_and_cannot_reshare_rename_delete_or_upload(): void
+    {
+        $adminPsti = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'PSTI',
+        ]);
+
+        $adminAkademik = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Biro Akademik',
+        ]);
+
+        $category = Category::create([
+            'name' => 'Kurikulum',
+            'slug' => 'kurikulum-unit-test',
+            'is_active' => true,
+        ]);
+
+        $folderPsti = Folder::create([
+            'name' => 'Folder Kurikulum PSTI',
+            'department' => 'PSTI',
+            'shared_departments' => ['Biro Akademik'],
+            'created_by' => $adminPsti->id,
+        ]);
+
+        $docPsti = Document::create([
+            'name' => 'Dokumen Kurikulum PSTI',
+            'category_id' => $category->id,
+            'folder_id' => $folderPsti->id,
+            'department' => 'PSTI',
+            'document_date' => now()->toDateString(),
+            'display_date' => now()->toDateString(),
+            'upload_date' => now()->toDateString(),
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'created_by' => $adminPsti->id,
+        ]);
+
+        // 1. Biro Akademik BISA melihat/mengakses (Read-Only)
+        $responseView = $this->actingAs($adminAkademik)->get("/folders?folder_id={$folderPsti->id}");
+        $responseView->assertStatus(200);
+        $responseView->assertSee('Dokumen Kurikulum PSTI');
+
+        // 2. Biro Akademik TIDAK BISA membagikan ulang folder ke biro lain (403)
+        $responseReshareFolder = $this->actingAs($adminAkademik)->postJson("/folders/{$folderPsti->id}/share", [
+            'shared_departments' => ['Biro Kemahasiswaan dan Alumni'],
+        ]);
+        $responseReshareFolder->assertStatus(403);
+
+        // 3. Biro Akademik TIDAK BISA mengubah nama folder (403)
+        $responseRename = $this->actingAs($adminAkademik)->put("/folders/{$folderPsti->id}", [
+            'name' => 'Folder Dibajak Akademik',
+        ]);
+        $responseRename->assertStatus(403);
+
+        // 4. Biro Akademik TIDAK BISA menghapus folder (403)
+        $responseDeleteFolder = $this->actingAs($adminAkademik)->delete("/folders/{$folderPsti->id}");
+        $responseDeleteFolder->assertStatus(403);
+
+        // 5. Biro Akademik TIDAK BISA upload berkas ke folder milik PSTI (403)
+        $responseUpload = $this->actingAs($adminAkademik)->post('/folders/quick-upload', [
+            'file' => UploadedFile::fake()->create('ilegal.pdf', 100),
+            'folder_id' => $folderPsti->id,
+        ]);
+        $responseUpload->assertStatus(403);
+
+        // 6. Biro Akademik TIDAK BISA membagikan ulang dokumen milik PSTI (403)
+        $responseReshareDoc = $this->actingAs($adminAkademik)->postJson("/documents/{$docPsti->uuid}/share", [
+            'shared_departments' => ['Biro Kemahasiswaan dan Alumni'],
+        ]);
+        $responseReshareDoc->assertStatus(403);
+
+        // 7. Biro Akademik TIDAK BISA menghapus dokumen milik PSTI (403)
+        $responseDeleteDoc = $this->actingAs($adminAkademik)->delete("/documents/{$docPsti->uuid}");
+        $responseDeleteDoc->assertStatus(403);
     }
 }

@@ -39,12 +39,12 @@ class DatabaseSeeder extends Seeder
             'UPT Laboratiorium' => 'admin.lab@simdok.local',
             'Biro Humas dan Protokol' => 'admin.humas@simdok.local',
             'Biro Kerjasama dan Urusan Internasional' => 'admin.bkui@simdok.local',
-            'Program Studi PSTI' => 'admin.psti@simdok.local',
+            'Program Studi Teknologi Informasi' => 'admin.psti@simdok.local',
         ];
 
         $adminUsers = [];
         foreach ($unitAdminsConfig as $unitName => $email) {
-            $dept = $unitName === 'Program Studi PSTI' ? 'PSTI' : $unitName;
+            $dept = $unitName === 'Program Studi Teknologi Informasi' ? 'Program Studi Teknologi Informasi' : $unitName;
             $adminUsers[$unitName] = User::create([
                 'name' => "Admin {$unitName}",
                 'email' => $email,
@@ -55,7 +55,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        $admin = $adminUsers['Program Studi PSTI'];
+        $admin = $adminUsers['Program Studi Teknologi Informasi'];
         $reviewer = $admin;
 
         // 3. Create Regular User / Viewer
@@ -117,10 +117,10 @@ class DatabaseSeeder extends Seeder
 
         // Program Studi Root Folder
         $prodiFolder = Folder::create([
-            'name' => 'Program Studi PSTI',
+            'name' => 'Program Studi Teknologi Informasi',
             'parent_id' => null,
-            'department' => 'PSTI',
-            'description' => 'Folder dokumen Program Studi PSTI',
+            'department' => 'Program Studi Teknologi Informasi',
+            'description' => 'Folder dokumen Program Studi Teknologi Informasi',
             'created_by' => $superAdmin->id,
         ]);
 

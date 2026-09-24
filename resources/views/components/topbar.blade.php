@@ -18,11 +18,11 @@
             </a>
 
             <a href="{{ route('google-drive.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('google-drive.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.99c-1.74 0-3.32.74-4.44 1.94l6.07 10.51 6.07-10.51c-1.12-1.2-2.7-1.94-4.44-1.94h-3.26zm-5.75 3.3l-5.76 9.98c.5 1.05 1.3 1.93 2.31 2.51l6.07-10.51-2.62-1.98zm11.48 0l-2.62 1.98 6.07 10.51c1.01-.58 1.81-1.46 2.31-2.51l-5.76-9.98zm-11.72 13.72c1.12 1.2 2.7 1.94 4.44 1.94h6.52c1.74 0 3.32-.74 4.44-1.94l-3.26-5.64h-8.88l-3.26 5.64z"/></svg>
+                <x-google-drive-icon class="w-3.5 h-3.5 shrink-0" />
                 Google Drive
             </a>
 
-            @if(auth()->user()->isSuperAdmin())
+            @if(auth()->user()->canManageUsers())
             <a href="{{ route('users.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('users.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors">
                 Pengguna
             </a>
@@ -56,6 +56,9 @@
 
                 <a href="{{ route('google-drive.index') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-medium">Google Drive</a>
                 <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50">Pengaturan Profil</a>
+                @if(auth()->user()->canManageUsers())
+                <a href="{{ route('users.index') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-medium">Kelola Pengguna</a>
+                @endif
 
                 <div class="border-t border-gray-100 my-1"></div>
 

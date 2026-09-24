@@ -204,16 +204,12 @@ class Folder extends Model
             return true;
         }
 
-        if ($this->created_by === $user->id) {
-            return true;
+        $effectiveDept = $this->getEffectiveDepartment();
+        if ($effectiveDept) {
+            return $user->isAdmin() && $user->matchesDepartment($effectiveDept);
         }
 
-        if ($user->isAdmin()) {
-            $effectiveDept = $this->getEffectiveDepartment();
-            return $effectiveDept && $user->matchesDepartment($effectiveDept);
-        }
-
-        return false;
+        return $user->isAdmin() && $this->created_by === $user->id;
     }
 
     public function scopeAccessible($query, ?User $user)

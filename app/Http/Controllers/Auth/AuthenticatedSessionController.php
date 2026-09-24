@@ -28,6 +28,16 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = $request->user();
+        if ($user) {
+            $user->forceFill([
+                'google_drive_access_token' => null,
+                'google_drive_refresh_token' => null,
+                'google_drive_token_expires_at' => null,
+                'google_drive_account_email' => null,
+            ])->save();
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
@@ -36,6 +46,16 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        if ($user) {
+            $user->forceFill([
+                'google_drive_access_token' => null,
+                'google_drive_refresh_token' => null,
+                'google_drive_token_expires_at' => null,
+                'google_drive_account_email' => null,
+            ])->save();
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

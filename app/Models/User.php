@@ -54,7 +54,7 @@ class User extends Authenticatable
         'UPT Laboratiorium',
         'Biro Humas dan Protokol',
         'Biro Kerjasama dan Urusan Internasional',
-        'Program Studi PSTI',
+        'Program Studi Teknologi Informasi',
     ];
 
     protected $fillable = [
@@ -110,7 +110,7 @@ class User extends Authenticatable
 
     public function canManageUsers(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isSuperAdmin() || $this->isAdmin();
     }
 
     public function getDepartmentAliases(): array
@@ -120,9 +120,12 @@ class User extends Authenticatable
         }
         $aliases = [$this->department];
         if ($this->department === 'PSTI') {
+            $aliases[] = 'Program Studi Teknologi Informasi';
             $aliases[] = 'Program Studi PSTI';
-        } elseif ($this->department === 'Program Studi PSTI') {
+        } elseif (in_array($this->department, ['Program Studi Teknologi Informasi', 'Program Studi PSTI'])) {
             $aliases[] = 'PSTI';
+            $aliases[] = 'Program Studi Teknologi Informasi';
+            $aliases[] = 'Program Studi PSTI';
         }
         return array_unique($aliases);
     }

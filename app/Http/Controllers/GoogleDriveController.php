@@ -19,17 +19,89 @@ class GoogleDriveController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
-        $items = $user->google_drive_access_token ? $this->drive->listItems($user) : [];
+        $folderId = (string) $request->query('folder_id', 'root');
+        if (trim($folderId) === '') {
+            $folderId = 'root';
+        }
+
+        $items = [];
+        $currentFolder = ['id' => 'root', 'name' => 'Drive Saya', 'parent_id' => null];
+
+        if ($user->google_drive_access_token) {
+            try {
+                $items = $this->drive->listContents($user, $folderId);
+                $currentFolder = $this->drive->getFolderDetails($user, $folderId);
+            } catch (Throwable $e) {
+                if (str_contains($e->getMessage(), 'invalid_grant') || str_contains($e->getMessage(), 'unauthenticated')) {
+                    $user->forceFill([
+                        'google_drive_access_token' => null,
+                        'google_drive_refresh_token' => null,
+                        'google_drive_token_expires_at' => null,
+                        'google_drive_account_email' => null,
+                    ])->save();
+
+                    return redirect()->route('google-drive.index')->with('error', 'Sesi Google Drive berakhir. Silakan hubungkan kembali.');
+                }
+                session()->flash('error', 'Gagal memuat isi Drive: ' . $e->getMessage());
+            }
+        }
+
         $foldersFromDrive = collect($items)->where('is_folder', true)->values();
         $filesFromDrive = collect($items)->where('is_folder', false)->values();
         $categories = Category::where('is_active', true)->orderBy('name')->get();
         $folders = Folder::accessible($user)->orderBy('name')->get();
         $units = array_merge(User::UNITS, ['PSTI']);
 
-        return view('google-drive.index', compact('items', 'foldersFromDrive', 'filesFromDrive', 'categories', 'folders', 'units'));
+        // Deteksi berkas mana saja yang sudah pernah di-add ke SMART (offline)
+        $importedDriveIds = DocumentVersion::where('notes', 'like', 'Impor dari Google Drive [ID:%')
+            ->pluck('notes')
+            ->map(function ($note) {
+                if (preg_match('/\[ID:(.+?)\]/', $note, $matches)) {
+                    return $matches[1];
+                }
+                return null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return view('google-drive.index', compact(
+            'items',
+            'foldersFromDrive',
+            'filesFromDrive',
+            'currentFolder',
+            'folderId',
+            'categories',
+            'folders',
+            'units',
+            'importedDriveIds'
+        ));
+    }
+
+    public function stream(string $fileId)
+    {
+        $user = auth()->user();
+        abort_unless($user->google_drive_access_token, 403);
+
+        try {
+            $data = $this->drive->getFileStream($user, $fileId);
+
+            return response()->stream(function () use ($data) {
+                $body = $data['stream'];
+                while (!$body->eof()) {
+                    echo $body->read(1024 * 8);
+                }
+            }, 200, [
+                'Content-Type' => $data['mime_type'],
+                'Content-Disposition' => 'inline; filename="' . addslashes($data['name']) . '"',
+                'Cache-Control' => 'no-cache, private',
+            ]);
+        } catch (Throwable) {
+            return redirect()->away("https://drive.google.com/file/d/{$fileId}/view");
+        }
     }
 
     public function connect()
@@ -37,6 +109,7 @@ class GoogleDriveController extends Controller
         abort_unless(config('services.google.client_id') && config('services.google.client_secret'), 503, 'Google Drive belum dikonfigurasi oleh administrator.');
 
         session(['google_drive_oauth_state' => $state = Str::random(40)]);
+        session()->save();
 
         return redirect()->away($this->drive->authorizationUrl($state));
     }
@@ -71,6 +144,7 @@ class GoogleDriveController extends Controller
 
         $validated = $request->validate([
             'drive_file_id' => 'required|string|max:255',
+            'document_name' => 'nullable|string|max:255',
             'category_id' => 'required|exists:categories,id',
             'folder_id' => 'nullable|exists:folders,id',
             'visibility' => 'required|in:viewer,internal,private',
@@ -85,13 +159,15 @@ class GoogleDriveController extends Controller
 
         try {
             $file = $this->drive->download($user, $validated['drive_file_id']);
+            $docName = trim($validated['document_name'] ?? '') ?: pathinfo($file['name'], PATHINFO_FILENAME);
+
             $document = Document::create([
                 'uuid' => (string) Str::uuid(),
-                'name' => pathinfo($file['name'], PATHINFO_FILENAME),
+                'name' => $docName,
                 'category_id' => $validated['category_id'],
                 'folder_id' => $folder?->id,
                 'department' => $folder?->getEffectiveDepartment() ?: $user->department,
-                'description' => 'Diimpor dari Google Drive.',
+                'description' => 'Diimpor dari Google Drive (Offline)',
                 'document_date' => now()->toDateString(),
                 'display_date' => now()->toDateString(),
                 'upload_date' => now()->toDateString(),
@@ -102,6 +178,7 @@ class GoogleDriveController extends Controller
                 'current_version' => 1,
                 'created_by' => $user->id,
             ]);
+
             DocumentVersion::create([
                 'document_id' => $document->id,
                 'version_number' => 1,
@@ -110,15 +187,46 @@ class GoogleDriveController extends Controller
                 'file_size' => $file['size'],
                 'mime_type' => $file['mime_type'],
                 'uploaded_by' => $user->id,
-                'notes' => 'Impor dari Google Drive',
+                'notes' => "Impor dari Google Drive [ID:{$validated['drive_file_id']}]",
             ]);
         } catch (Throwable $exception) {
             return back()->withInput()->with('error', $exception->getMessage());
         }
 
-        AuditLog::log('document_imported', "Dokumen '{$document->name}' diimpor dari Google Drive.", Document::class, $document->id);
+        AuditLog::log('document_imported', "Dokumen '{$document->name}' diimpor offline dari Google Drive.", Document::class, $document->id);
 
-        return back()->with('success', "Dokumen '{$document->name}' berhasil diimpor ke penyimpanan lokal.");
+        return back()->with('success', "Dokumen '{$document->name}' berhasil di-add ke sistem SMART (tersimpan offline).");
+    }
+
+    public function createFolder(Request $request)
+    {
+        $user = auth()->user();
+        abort_unless($user->canUploadDocuments(), 403);
+
+        $validated = $request->validate([
+            'folder_name' => 'required|string|max:255',
+            'parent_id' => 'nullable|exists:folders,id',
+            'shared_departments' => 'nullable|array',
+            'shared_departments.*' => 'string|in:' . implode(',', array_merge(User::UNITS, ['PSTI'])),
+        ]);
+
+        $parentFolder = !empty($validated['parent_id']) ? Folder::findOrFail($validated['parent_id']) : null;
+        if ($parentFolder) {
+            abort_unless($parentFolder->canManage($user), 403, 'Akses ke folder tujuan ditolak.');
+        }
+
+        $folder = Folder::create([
+            'name' => $validated['folder_name'],
+            'parent_id' => $parentFolder?->id,
+            'department' => $parentFolder?->getEffectiveDepartment() ?: $user->department,
+            'description' => 'Folder dibuat dari referensi Google Drive',
+            'shared_departments' => $validated['shared_departments'] ?? [],
+            'created_by' => $user->id,
+        ]);
+
+        AuditLog::log('folder_created', "Folder '{$folder->name}' dibuat di SMART.", Folder::class, $folder->id);
+
+        return back()->with('success', "Folder '{$folder->name}' berhasil dibuat di SMART. Berkas dapat dipilih dan ditambahkan ke dalam folder ini.");
     }
 
     public function importFolder(Request $request)
@@ -141,6 +249,8 @@ class GoogleDriveController extends Controller
             abort_unless($parentFolder->canManage($user), 403, 'Akses ke folder tujuan ditolak.');
         }
 
+        @set_time_limit(300);
+
         try {
             $meta = $this->drive->getFolderMetadata($user, $validated['drive_folder_id']);
             $folderName = trim($validated['folder_name'] ?? '') ?: $meta['name'];
@@ -158,58 +268,15 @@ class GoogleDriveController extends Controller
                 'created_by' => $user->id,
             ]);
 
-            // 2. Deteksi semua file di dalam folder Google Drive tersebut
-            $files = $this->drive->listFilesInFolder($user, $validated['drive_folder_id']);
-            $importedCount = 0;
-            $skippedCount = 0;
-
-            foreach ($files as $file) {
-                if ($file['is_folder']) {
-                    continue;
-                }
-
-                if (!$file['importable']) {
-                    $skippedCount++;
-                    continue;
-                }
-
-                try {
-                    $downloaded = $this->drive->download($user, $file['id']);
-
-                    $document = Document::create([
-                        'uuid' => (string) Str::uuid(),
-                        'name' => pathinfo($downloaded['name'], PATHINFO_FILENAME),
-                        'category_id' => $validated['category_id'],
-                        'folder_id' => $localFolder->id,
-                        'department' => $department,
-                        'description' => "Berkas diimpor bersama folder '{$localFolder->name}'",
-                        'document_date' => now()->toDateString(),
-                        'display_date' => now()->toDateString(),
-                        'upload_date' => now()->toDateString(),
-                        'status' => $validated['visibility'] === 'viewer' ? Document::STATUS_APPROVED : Document::STATUS_DRAFT,
-                        'visibility' => $validated['visibility'],
-                        'shared_departments' => $sharedDepts,
-                        'is_downloadable' => true,
-                        'current_version' => 1,
-                        'created_by' => $user->id,
-                    ]);
-
-                    DocumentVersion::create([
-                        'document_id' => $document->id,
-                        'version_number' => 1,
-                        'file_path' => $downloaded['path'],
-                        'original_filename' => $downloaded['name'],
-                        'file_size' => $downloaded['size'],
-                        'mime_type' => $downloaded['mime_type'],
-                        'uploaded_by' => $user->id,
-                        'notes' => "Diimpor dari Google Drive ke folder {$localFolder->name}",
-                    ]);
-
-                    $importedCount++;
-                } catch (\Throwable $e) {
-                    $skippedCount++;
-                }
-            }
+            // 2. Impor seluruh berkas & subfolder di dalam folder tersebut
+            $importedCount = $this->importFolderContentsRecursively(
+                $user,
+                $validated['drive_folder_id'],
+                $localFolder,
+                (int) $validated['category_id'],
+                $validated['visibility'],
+                $sharedDepts
+            );
 
             AuditLog::log(
                 'folder_imported',
@@ -218,10 +285,84 @@ class GoogleDriveController extends Controller
                 $localFolder->id
             );
 
-            return redirect()->route('folders.index', ['folder_id' => $localFolder->id])
-                ->with('success', "Folder '{$localFolder->name}' berhasil dibuat di SMART dengan {$importedCount} berkas terunduh dan siap dibagikan offline.");
-        } catch (\Throwable $exception) {
+            return redirect()->route('google-drive.index', ['folder_id' => $validated['drive_folder_id']])
+                ->with('success', "Folder '{$localFolder->name}' beserta {$importedCount} berkas di dalamnya berhasil diimpor offline ke SMART.");
+        } catch (Throwable $exception) {
             return back()->withInput()->with('error', 'Gagal mengimpor folder: ' . $exception->getMessage());
         }
+    }
+
+    private function importFolderContentsRecursively(
+        User $user,
+        string $driveFolderId,
+        Folder $targetLocalFolder,
+        int $categoryId,
+        string $visibility,
+        array $sharedDepartments
+    ): int {
+        $files = $this->drive->listFilesInFolder($user, $driveFolderId);
+        $importedCount = 0;
+
+        foreach ($files as $file) {
+            if ($file['is_folder']) {
+                $subFolder = Folder::create([
+                    'name' => $file['name'],
+                    'parent_id' => $targetLocalFolder->id,
+                    'department' => $targetLocalFolder->getEffectiveDepartment() ?: $user->department,
+                    'description' => "Subfolder diimpor dari Google Drive",
+                    'shared_departments' => $sharedDepartments,
+                    'created_by' => $user->id,
+                ]);
+
+                $importedCount += $this->importFolderContentsRecursively(
+                    $user,
+                    $file['id'],
+                    $subFolder,
+                    $categoryId,
+                    $visibility,
+                    $sharedDepartments
+                );
+                continue;
+            }
+
+            try {
+                $downloaded = $this->drive->download($user, $file['id']);
+
+                $document = Document::create([
+                    'uuid' => (string) Str::uuid(),
+                    'name' => pathinfo($downloaded['name'], PATHINFO_FILENAME),
+                    'category_id' => $categoryId,
+                    'folder_id' => $targetLocalFolder->id,
+                    'department' => $targetLocalFolder->getEffectiveDepartment() ?: $user->department,
+                    'description' => "Berkas diimpor bersama folder '{$targetLocalFolder->name}'",
+                    'document_date' => now()->toDateString(),
+                    'display_date' => now()->toDateString(),
+                    'upload_date' => now()->toDateString(),
+                    'status' => $visibility === 'viewer' ? Document::STATUS_APPROVED : Document::STATUS_DRAFT,
+                    'visibility' => $visibility,
+                    'shared_departments' => $sharedDepartments,
+                    'is_downloadable' => true,
+                    'current_version' => 1,
+                    'created_by' => $user->id,
+                ]);
+
+                DocumentVersion::create([
+                    'document_id' => $document->id,
+                    'version_number' => 1,
+                    'file_path' => $downloaded['path'],
+                    'original_filename' => $downloaded['name'],
+                    'file_size' => $downloaded['size'],
+                    'mime_type' => $downloaded['mime_type'],
+                    'uploaded_by' => $user->id,
+                    'notes' => "Impor dari Google Drive [ID:{$file['id']}]",
+                ]);
+
+                $importedCount++;
+            } catch (Throwable) {
+                // Lewati berkas jika ada kendala agar berkas lainnya tetap terimpor
+            }
+        }
+
+        return $importedCount;
     }
 }

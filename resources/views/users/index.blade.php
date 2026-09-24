@@ -2,7 +2,13 @@
     <div class="flex justify-between items-center mb-6">
         <div>
             <h2 class="text-2xl font-bold text-gray-800">Manajemen Pengguna</h2>
-            <p class="text-sm text-gray-500 mt-1">Kelola akun, role, dan hak akses pengguna sistem.</p>
+            <p class="text-sm text-gray-500 mt-1">
+                @if(auth()->user()->isSuperAdmin())
+                    Kelola akun, role, dan hak akses seluruh pengguna sistem.
+                @else
+                    Kelola akun staf dan pengguna pada unit <strong>{{ auth()->user()->department }}</strong>.
+                @endif
+            </p>
         </div>
         <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 active:bg-blue-900 focus:outline-none focus:border-blue-900 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
@@ -75,17 +81,21 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div class="flex justify-end space-x-2">
+                                @if(auth()->user()->isSuperAdmin() || (!empty($user->department) && auth()->user()->matchesDepartment($user->department) && !$user->isSuperAdmin()))
                                 <a href="{{ route('users.edit', $user) }}" class="text-gray-500 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 p-1.5 rounded transition-colors" title="Edit">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                 </a>
                                 @if(auth()->id() !== $user->id)
-                                <form action="{{ route('users.destroy', $user) }}" method="POST" class="inline" onsubmit="return confirm('Anda yakin ingin menghapus pengguna ini? Semua data terkait (seperti log audit) mungkin akan terpengaruh.');">
+                                <form action="{{ route('users.destroy', $user) }}" method="POST" class="inline" onsubmit="return confirm('Anda yakin ingin menghapus pengguna ini?');">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="text-gray-500 hover:text-red-600 bg-gray-50 hover:bg-red-50 p-1.5 rounded transition-colors" title="Hapus">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
                                 </form>
+                                @endif
+                                @else
+                                <span class="text-xs text-gray-400 italic">Terkunci</span>
                                 @endif
                             </div>
                         </td>

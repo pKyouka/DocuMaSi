@@ -211,7 +211,7 @@ class FolderController extends Controller
     public function update(Request $request, Folder $folder)
     {
         $user = auth()->user();
-        abort_unless($folder->canAccess($user), 403);
+        abort_unless($folder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat mengubah folder ini.');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -233,7 +233,7 @@ class FolderController extends Controller
     public function destroy(Folder $folder)
     {
         $user = auth()->user();
-        abort_unless($folder->canAccess($user), 403);
+        abort_unless($folder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat menghapus folder ini.');
 
         if (!$user->isSuperAdmin() && empty($folder->parent_id)) {
             abort(403, 'Hanya Superadmin yang dapat menghapus folder utama.');
@@ -266,7 +266,7 @@ class FolderController extends Controller
 
         if (!empty($validated['folder_id'])) {
             $targetFolder = Folder::findOrFail($validated['folder_id']);
-            abort_unless($targetFolder->canAccess($user), 403, 'Anda tidak memiliki akses ke folder tujuan.');
+            abort_unless($targetFolder->canManage($user), 403, 'Akses ditolak: Anda tidak memiliki izin mengelola folder tujuan.');
             $doc->update(['folder_id' => $targetFolder->id]);
             $targetName = $targetFolder->name;
         } else {

@@ -22,7 +22,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('google-drive/connect', [GoogleDriveController::class, 'connect'])->name('google-drive.connect');
     Route::post('google-drive/disconnect', [GoogleDriveController::class, 'disconnect'])->name('google-drive.disconnect');
     Route::post('google-drive/import', [GoogleDriveController::class, 'import'])->name('google-drive.import');
+    Route::post('google-drive/create-folder', [GoogleDriveController::class, 'createFolder'])->name('google-drive.create-folder');
     Route::post('google-drive/import-folder', [GoogleDriveController::class, 'importFolder'])->name('google-drive.import-folder');
+    Route::get('google-drive/stream/{fileId}', [GoogleDriveController::class, 'stream'])->name('google-drive.stream');
 
     Route::get('documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
     Route::get('documents/{document}/preview/{version?}', [DocumentController::class, 'preview'])->name('documents.preview');
@@ -47,10 +49,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('documents/{document}/share', [DocumentController::class, 'updateSharing'])->name('documents.share');
     Route::post('documents/{document}/display-date', [DocumentController::class, 'updateDisplayDate'])->name('documents.display-date');
 
-    // Superadmin Only: Manajemen Pengguna
-    Route::middleware('role:'.User::ROLE_SUPERADMIN)->group(function () {
-        Route::resource('users', UserController::class)->except(['show']);
-    });
+    // Manajemen Pengguna (Superadmin & Admin Unit/Prodi)
+    Route::resource('users', UserController::class)->except(['show']);
 });
 
 Route::get('google-drive/callback', [GoogleDriveController::class, 'callback'])->middleware(['auth', 'active'])->name('google-drive.callback');

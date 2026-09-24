@@ -62,7 +62,7 @@ class SearchController extends Controller
         $categories = Category::where('is_active', true)->orderBy('name')->get();
         $biros = array_values(array_unique(array_merge(
             User::BIROS,
-            ['Program Studi PSTI'],
+            ['Program Studi Teknologi Informasi'],
             Document::distinct()->whereNotNull('department')->pluck('department')->toArray()
         )));
         sort($biros);

@@ -85,7 +85,7 @@ class DocumentController extends Controller
         // Validate folder permission
         if (!empty($validated['folder_id'])) {
             $targetFolder = Folder::findOrFail($validated['folder_id']);
-            abort_unless($targetFolder->canAccess($user), 403, 'Akses ke folder tujuan ditolak.');
+            abort_unless($targetFolder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat menambahkan dokumen ke folder ini.');
             if (empty($validated['department'])) {
                 $validated['department'] = $targetFolder->getEffectiveDepartment();
             }
@@ -327,11 +327,7 @@ class DocumentController extends Controller
         $user = auth()->user();
         $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
 
-        $isOwnerDept = ($doc->department && $user->department && (
-            $doc->department === $user->department ||
-            ($doc->department === 'PSTI' && $user->department === 'Program Studi PSTI') ||
-            ($doc->department === 'Program Studi PSTI' && $user->department === 'PSTI')
-        ));
+        $isOwnerDept = $doc->department && $user->matchesDepartment($doc->department);
 
         abort_unless($user && ($user->isSuperAdmin() || $doc->created_by === $user->id || $isOwnerDept), 403, 'Anda tidak memiliki hak untuk mengatur pembagian dokumen ini.');
 

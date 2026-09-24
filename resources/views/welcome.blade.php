@@ -6,6 +6,12 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        <!-- Favicon (PSTI UNISA) -->
+        <link rel="icon" href="{{ asset('favicon.png') }}" type="image/png">
+        <link rel="icon" href="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/cropped-unisa22-scaled-1-32x32.jpg" sizes="32x32">
+        <link rel="icon" href="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/cropped-unisa22-scaled-1-192x192.jpg" sizes="192x192">
+        <link rel="apple-touch-icon" href="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/cropped-unisa22-scaled-1-180x180.jpg">
+
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
