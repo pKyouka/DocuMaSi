@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'DocuMaSi') }} - Pencarian Publik</title>
+        <title>{{ config('app.name', 'SMART') }} - Pencarian Publik</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased text-gray-900 bg-[#f4f7f5] flex flex-col min-h-screen">
-        
+
         <!-- Header Publik -->
         <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -28,7 +28,7 @@
                                 D
                             </div>
                             <div class="hidden sm:block">
-                                <h1 class="text-sm font-bold leading-tight text-[#173b30]">DocuMaSi</h1>
+                                <h1 class="text-sm font-bold leading-tight text-[#173b30]">SMART</h1>
                                 <p class="text-[9px] text-gray-500 uppercase tracking-widest font-semibold">Portal Dokumen Publik</p>
                             </div>
                         </a>
@@ -56,7 +56,7 @@
                 {{ $slot }}
             </div>
         </main>
-        
+
         <!-- Footer -->
         <footer class="bg-white border-t border-gray-200 py-6 text-center">
             <p class="text-sm text-gray-500">&copy; {{ date('Y') }} Universitas 'Aisyiyah Yogyakarta</p>

@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'DocuMaSi'),
+    'name' => env('APP_NAME', 'SMART - Sistem Manajemen Arsip Repository Teknologi Informasi'),
 
     /*
     |--------------------------------------------------------------------------

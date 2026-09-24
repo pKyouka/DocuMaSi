@@ -1,7 +1,7 @@
 <x-explorer-layout>
-    <div class="h-screen w-screen flex flex-col bg-gray-50 overflow-hidden" 
-         @click="closeContextMenu()" 
-         @contextmenu="closeContextMenu()" 
+    <div class="h-screen w-screen flex flex-col bg-gray-50 overflow-hidden"
+         @click="closeContextMenu()"
+         @contextmenu="closeContextMenu()"
          @keydown.escape="closeContextMenu(); closeShareModal();"
          x-data="{
         viewMode: 'grid',
@@ -11,7 +11,7 @@
         previewModal: false,
         inspectorOpen: false,
         activeDoc: null,
-        
+
         editFolderId: null,
         editFolderName: '',
         moveDocId: null,
@@ -79,12 +79,12 @@
             this.contextMenu.show = true;
             this.contextMenu.type = type;
             this.contextMenu.item = item;
-            
+
             const menuWidth = 220;
             const menuHeight = 250;
             const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
             const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
-            
+
             this.contextMenu.x = Math.max(10, x);
             this.contextMenu.y = Math.max(10, y);
         },
@@ -124,7 +124,7 @@
                 const data = await response.json();
                 if (data.success) {
                     this.triggerToast(data.message || 'Tanggal tampil berhasil diubah.');
-                    
+
                     if (this.activeDoc && (this.activeDoc.id === this.editDateModal.id || this.activeDoc.uuid === this.editDateModal.uuid)) {
                         this.activeDoc.date = data.display_date_formatted;
                         this.activeDoc.raw_date = data.display_date;
@@ -164,7 +164,7 @@
             } else {
                 this.shareModal.selectedBiros = [];
             }
-            
+
             if (type === 'folder') {
                 this.shareModal.url = `${window.location.origin}/folders?folder_id=${item.id}`;
             } else {
@@ -228,7 +228,7 @@
                 this.activeDoc.shared_departments = currentSelected;
             }
 
-            const endpoint = type === 'folder' 
+            const endpoint = type === 'folder'
                 ? `/folders/${this.shareModal.id}/share`
                 : `/documents/${this.shareModal.uuid || this.shareModal.id}/share`;
 
@@ -598,9 +598,9 @@
             }
             await this.processUploadQueue(queue);
         }
-    }" 
-    @dragover="onWindowDragOver($event)" 
-    @dragleave="onWindowDragLeave($event)" 
+    }"
+    @dragover="onWindowDragOver($event)"
+    @dragleave="onWindowDragLeave($event)"
     @drop="onWindowDrop($event)">
 
         <!-- Fullscreen Drop Overlay -->
@@ -636,12 +636,12 @@
             <!-- Left: Logo & Brand -->
             <div class="flex items-center gap-3 shrink-0">
                 <a href="{{ route('home') }}" class="flex items-center gap-3">
-                    <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png" 
-                         alt="Program Studi Teknologi Informasi UNISA" 
+                    <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png"
+                         alt="Program Studi Teknologi Informasi UNISA"
                          class="h-9 sm:h-10 w-auto object-contain"
                          onerror="this.style.display='none'">
                     <div class="border-l border-white/20 pl-3">
-                        <h1 class="text-sm sm:text-base font-black text-white leading-tight tracking-tight">DocuMaSi</h1>
+                        <h1 class="text-sm sm:text-base font-black text-white leading-tight tracking-tight">SMART</h1>
                         <p class="text-[10px] text-[#f1b500] font-bold uppercase tracking-wider">File Explorer &bull; PSTI</p>
                     </div>
                 </a>
@@ -785,7 +785,7 @@
 
         <!-- Main Workspace Area: Tree Left Pane + Explorer Content + Right Inspector -->
         <div class="flex-1 flex overflow-hidden">
-            
+
             <!-- Left Pane: Folder Tree Directory (Explorer Style) -->
             <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 overflow-y-auto hidden md:flex">
                 <div class="p-3 border-b border-gray-100 flex items-center justify-between shrink-0 bg-slate-50/60">
@@ -813,7 +813,7 @@
                              @drop="onFolderDrop($event, {{ $rf->id }})"
                              @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $rf->id }}, name: '{{ addslashes($rf->name) }}', department: '{{ addslashes($rf->department ?? 'Umum') }}', shared_departments: {{ json_encode($rf->shared_departments ?? []) }}, can_manage: {{ $rf->canManage(auth()->user()) ? 'true' : 'false' }}, url: '{{ route('folders.index', ['folder_id' => $rf->id]) }}' })"
                              :class="hoveredFolderId == {{ $rf->id }} ? 'ring-2 ring-[#f1b500] bg-amber-50' : ''">
-                            
+
                             <a href="{{ route('folders.index', ['folder_id' => $rf->id]) }}" class="flex items-center min-w-0 flex-1 truncate">
                                 <svg class="w-3.5 h-3.5 mr-2 text-[#f1b500] shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
                                 <span class="truncate">{{ $rf->name }}</span>
@@ -888,7 +888,7 @@
                                  @drop="onFolderDrop($event, {{ $sf->id }})"
                                  @contextmenu.prevent="openContextMenu($event, 'folder', { id: {{ $sf->id }}, name: '{{ addslashes($sf->name) }}', department: '{{ addslashes($sf->department ?? 'Umum') }}', shared_departments: {{ json_encode($sf->shared_departments ?? []) }}, url: '{{ route('folders.index', ['folder_id' => $sf->id]) }}' })"
                                  :class="hoveredFolderId == {{ $sf->id }} ? 'ring-2 ring-[#f1b500] bg-amber-50/40 scale-105 transition-transform' : ''">
-                                
+
                                 <div class="flex items-start justify-between">
                                     <a href="{{ route('folders.index', ['folder_id' => $sf->id]) }}" class="flex items-center min-w-0 flex-1 pr-2">
                                         <div class="w-9 h-9 rounded-lg bg-amber-50 text-[#f1b500] flex items-center justify-center mr-2.5 shrink-0 group-hover:scale-105 transition-transform">
@@ -995,7 +995,7 @@
                                         'is_shared' => $isDocShared,
                                     ];
                                 @endphp
-                                <div draggable="{{ auth()->check() ? 'true' : 'false' }}" 
+                                <div draggable="{{ auth()->check() ? 'true' : 'false' }}"
                                      @dragstart="onDocDragStart($event, '{{ $doc->uuid }}')"
                                      @click="selectDoc({{ json_encode($docPayload) }})"
                                      @contextmenu.prevent="openContextMenu($event, 'document', {{ json_encode($docPayload) }})"
@@ -1218,15 +1218,15 @@
             </main>
 
             <!-- Right Pane: File Inspector Drawer (Google Drive Info Panel) -->
-            <aside x-show="inspectorOpen" 
-                   x-transition:enter="transition ease-out duration-200 transform" 
-                   x-transition:enter-start="translate-x-full opacity-0" 
-                   x-transition:enter-end="translate-x-0 opacity-100" 
-                   x-transition:leave="transition ease-in duration-150 transform" 
-                   x-transition:leave-start="translate-x-0 opacity-100" 
-                   x-transition:leave-end="translate-x-full opacity-0" 
-                   class="w-72 bg-white border-l border-gray-200 p-5 flex flex-col shrink-0 overflow-y-auto shadow-lg" 
-                   style="display: none;" 
+            <aside x-show="inspectorOpen"
+                   x-transition:enter="transition ease-out duration-200 transform"
+                   x-transition:enter-start="translate-x-full opacity-0"
+                   x-transition:enter-end="translate-x-0 opacity-100"
+                   x-transition:leave="transition ease-in duration-150 transform"
+                   x-transition:leave-start="translate-x-0 opacity-100"
+                   x-transition:leave-end="translate-x-full opacity-0"
+                   class="w-72 bg-white border-l border-gray-200 p-5 flex flex-col shrink-0 overflow-y-auto shadow-lg"
+                   style="display: none;"
                    x-cloak>
                 <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
                     <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Detail Berkas</h4>
@@ -1405,13 +1405,13 @@
         </div>
 
         <!-- Custom Right-Click Context Menu (Google Drive / Windows 11 style) -->
-        <div x-show="contextMenu.show" 
+        <div x-show="contextMenu.show"
              @click.outside="closeContextMenu()"
              :style="`position: fixed; left: ${contextMenu.x}px; top: ${contextMenu.y}px; z-index: 9999;`"
              class="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-200 py-1.5 min-w-[210px] text-xs font-medium divide-y divide-gray-100 select-none animate-in fade-in zoom-in-95 duration-75"
-             style="display: none;" 
+             style="display: none;"
              x-cloak>
-            
+
             <!-- Folder Context Menu -->
             <template x-if="contextMenu.type === 'folder' && contextMenu.item">
                 <div>
@@ -1542,7 +1542,7 @@
 
                     <!-- Body Modal -->
                     <div class="py-4 space-y-4 text-xs">
-                        
+
                         <!-- 1. Section: Pilih Biro / Unit yang Diberikan Izin Akses -->
                         <div>
                             <div class="flex items-center justify-between mb-2">
@@ -1563,7 +1563,7 @@
                                     <label class="flex items-center justify-between p-2 rounded-lg hover:bg-white transition-colors cursor-pointer"
                                            :class="shareModal.selectedBiros.includes(unit) ? 'bg-blue-50/60 font-semibold text-blue-900' : 'text-gray-700'">
                                         <div class="flex items-center gap-2.5 min-w-0 pr-2">
-                                            <input type="checkbox" 
+                                            <input type="checkbox"
                                                    :value="unit"
                                                    x-model="shareModal.selectedBiros"
                                                    @change="autoSavePermissions()"

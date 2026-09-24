@@ -77,6 +77,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'google_drive_access_token' => 'encrypted',
+            'google_drive_refresh_token' => 'encrypted',
+            'google_drive_token_expires_at' => 'datetime',
         ];
     }
 

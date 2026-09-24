@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ $title ?? 'Masuk' }} - DocuMaSi | Teknologi Informasi UNISA</title>
+        <title>{{ $title ?? 'Masuk' }} - SMART | Teknologi Informasi UNISA</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,13 +20,13 @@
         <header class="bg-[#002147] border-b-2 border-[#f1b500] shadow-sm px-6 py-3 shrink-0">
             <div class="max-w-6xl mx-auto flex items-center justify-between">
                 <a href="{{ route('home') }}" class="flex items-center gap-3">
-                    <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png" 
-                         alt="Program Studi Teknologi Informasi UNISA" 
+                    <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png"
+                         alt="Program Studi Teknologi Informasi UNISA"
                          class="h-9 sm:h-11 w-auto object-contain"
                          onerror="this.style.display='none'">
                     <div class="border-l border-white/20 pl-3 hidden sm:block">
-                        <span class="text-white text-xs font-bold tracking-wider uppercase block">DocuMaSi</span>
-                        <span class="text-gray-300 text-[10px] block">Sistem Manajemen Dokumen</span>
+                        <span class="text-white text-xs font-bold tracking-wider uppercase block">SMART</span>
+                        <span class="text-gray-300 text-[10px] block">Sistem Manajemen Arsip Repository Teknologi Informasi</span>
                     </div>
                 </a>
                 <div class="text-right hidden md:block">

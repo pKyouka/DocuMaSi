@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\FolderController;
+use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\UserController;
@@ -16,6 +17,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('folders', [FolderController::class, 'index'])->name('folders.index');
     Route::get('search', [SearchController::class, 'index'])->name('search.index');
     Route::get('viewer', [SearchController::class, 'index'])->name('viewer.index');
+
+    Route::get('google-drive', [GoogleDriveController::class, 'index'])->name('google-drive.index');
+    Route::get('google-drive/connect', [GoogleDriveController::class, 'connect'])->name('google-drive.connect');
+    Route::post('google-drive/import', [GoogleDriveController::class, 'import'])->name('google-drive.import');
 
     Route::get('documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
     Route::get('documents/{document}/preview/{version?}', [DocumentController::class, 'preview'])->name('documents.preview');
@@ -45,5 +50,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::resource('users', UserController::class)->except(['show']);
     });
 });
+
+Route::get('google-drive/callback', [GoogleDriveController::class, 'callback'])->middleware(['auth', 'active'])->name('google-drive.callback');
 
 require __DIR__.'/auth.php';

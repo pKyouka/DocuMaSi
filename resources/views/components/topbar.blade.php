@@ -2,13 +2,13 @@
     <!-- Left: Brand Logo & Navigation -->
     <div class="flex items-center gap-6">
         <a href="{{ route('home') }}" class="flex items-center gap-3">
-            <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png" 
-                 alt="Program Studi Teknologi Informasi UNISA" 
+            <img src="https://psti.unisayogya.ac.id/wp-content/uploads/2023/11/logo-ti-unisa-putih.png"
+                 alt="Program Studi Teknologi Informasi UNISA"
                  class="h-9 sm:h-10 w-auto object-contain"
                  onerror="this.style.display='none'">
             <div class="border-l border-white/20 pl-3">
-                <h1 class="text-sm sm:text-base font-black text-white leading-tight tracking-tight">DocuMaSi</h1>
-                <p class="text-[10px] text-[#f1b500] font-bold uppercase tracking-wider">File Explorer &bull; PSTI</p>
+                <h1 class="text-sm sm:text-base font-black text-white leading-tight tracking-tight">SMART</h1>
+                <p class="text-[10px] text-[#f1b500] font-bold uppercase tracking-wider">Arsip Repository TI &bull; PSTI</p>
             </div>
         </a>
 
@@ -50,7 +50,7 @@
                 </div>
 
                 <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50">Pengaturan Profil</a>
-                
+
                 <div class="border-t border-gray-100 my-1"></div>
 
                 <form method="POST" action="{{ route('logout') }}">

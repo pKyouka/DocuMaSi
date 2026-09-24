@@ -5,8 +5,8 @@
             S
         </div>
         <div>
-            <h1 class="text-lg font-bold leading-tight tracking-wide text-gray-100">SIMDOK</h1>
-            <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">File Explorer &amp; DMS</p>
+            <h1 class="text-lg font-bold leading-tight tracking-wide text-gray-100">SMART</h1>
+            <p class="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Arsip Repository TI</p>
         </div>
     </div>
 
@@ -17,6 +17,12 @@
                 <a href="{{ route('folders.index') }}" class="flex items-center px-3 py-2.5 rounded-lg {{ request()->routeIs('folders.*') || request()->routeIs('dashboard') ? 'bg-blue-600/20 text-blue-400 font-medium' : 'text-gray-300 hover:bg-gray-800 hover:text-white transition-colors' }}">
                     <svg class="w-5 h-5 mr-3 {{ request()->routeIs('folders.*') || request()->routeIs('dashboard') ? 'text-blue-400' : 'text-gray-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
                     File Explorer
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('google-drive.index') }}" class="flex items-center px-3 py-2.5 rounded-lg {{ request()->routeIs('google-drive.*') ? 'bg-blue-600/20 text-blue-400 font-medium' : 'text-gray-300 hover:bg-gray-800 hover:text-white transition-colors' }}">
+                    <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"></path></svg>
+                    Impor dari Google Drive
                 </a>
             </li>
 
@@ -41,10 +47,10 @@
     <!-- Footer Sidebar -->
     <div class="p-4 border-t border-gray-800 bg-[#0B1121] text-center">
         <div class="text-xs text-gray-400 mb-1">
-            <span class="font-semibold text-blue-400">SIMDOK</span>
+            <span class="font-semibold text-blue-400">SMART</span>
         </div>
         <div class="text-[10px] text-gray-500">
-            Sistem Manajemen Dokumen
+            Sistem Manajemen Arsip Repository Teknologi Informasi
         </div>
     </div>
 </aside>
