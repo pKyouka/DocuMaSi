@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\FolderController;
@@ -48,6 +49,12 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('documents/{document}/archive', [DocumentController::class, 'archive'])->name('documents.archive');
     Route::post('documents/{document}/share', [DocumentController::class, 'updateSharing'])->name('documents.share');
     Route::post('documents/{document}/display-date', [DocumentController::class, 'updateDisplayDate'])->name('documents.display-date');
+
+    // Approvals (Admin Prodi, Admin Biro, & Superadmin)
+    Route::get('approvals', [ApprovalController::class, 'index'])->name('approvals.index');
+    Route::post('approvals/{document}/review', [ApprovalController::class, 'review'])->name('approvals.review');
+    Route::post('approvals/{document}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
+    Route::post('approvals/{document}/revision', [ApprovalController::class, 'requestRevision'])->name('approvals.revision');
 
     // Manajemen Pengguna (Superadmin & Admin Unit/Prodi)
     Route::resource('users', UserController::class)->except(['show']);

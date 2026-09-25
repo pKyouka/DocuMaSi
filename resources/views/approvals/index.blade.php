@@ -7,22 +7,20 @@
     <!-- Tabs -->
     <div class="mb-6 border-b border-gray-200">
         <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-            <a href="{{ route('approvals.index', ['tab' => 'pending']) }}" class="{{ $tab == 'pending' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Menunggu Review
-                @php $pendingCount = \App\Models\Document::whereIn('status', [\App\Models\Document::STATUS_SUBMITTED, \App\Models\Document::STATUS_REVIEW])->count(); @endphp
-                @if($pendingCount > 0)
-                <span class="ml-2 bg-blue-100 text-blue-600 py-0.5 px-2.5 rounded-full text-xs font-semibold">{{ $pendingCount }}</span>
+            <a href="{{ route('approvals.index', ['tab' => 'pending']) }}" class="{{ $tab == 'pending' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center">
+                Menunggu Review &amp; ACC
+                @if(($pendingCount ?? 0) > 0)
+                <span class="ml-2 bg-amber-100 text-amber-800 py-0.5 px-2.5 rounded-full text-xs font-bold ring-1 ring-amber-300">{{ $pendingCount }}</span>
                 @endif
             </a>
-            <a href="{{ route('approvals.index', ['tab' => 'revision']) }}" class="{{ $tab == 'revision' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            <a href="{{ route('approvals.index', ['tab' => 'revision']) }}" class="{{ $tab == 'revision' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center">
                 Perlu Revisi
-                @php $revCount = \App\Models\Document::where('status', \App\Models\Document::STATUS_REVISION)->count(); @endphp
-                @if($revCount > 0)
-                <span class="ml-2 bg-red-100 text-red-600 py-0.5 px-2.5 rounded-full text-xs font-semibold">{{ $revCount }}</span>
+                @if(($revisionCount ?? 0) > 0)
+                <span class="ml-2 bg-red-100 text-red-600 py-0.5 px-2.5 rounded-full text-xs font-semibold">{{ $revisionCount }}</span>
                 @endif
             </a>
-            <a href="{{ route('approvals.index', ['tab' => 'approved']) }}" class="{{ $tab == 'approved' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Riwayat Disetujui
+            <a href="{{ route('approvals.index', ['tab' => 'approved']) }}" class="{{ $tab == 'approved' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                Riwayat Disetujui (ACC)
             </a>
         </nav>
     </div>
@@ -57,9 +55,30 @@
                             <div class="text-xs text-gray-500">{{ $doc->department ?? '-' }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-{{ $doc->status_color }}-50 text-{{ $doc->status_color }}-700 ring-1 ring-inset ring-{{ $doc->status_color }}-600/20">
-                                {{ $doc->status_label }}
-                            </span>
+                            @php
+                                $statusColor = $doc->getDisplayStatusColorForUser(auth()->user());
+                                $statusLabel = $doc->getDisplayStatusLabelForUser(auth()->user());
+                            @endphp
+                            @if($statusColor === 'green')
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">
+                                    <svg class="w-3.5 h-3.5 mr-1 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    {{ $statusLabel }}
+                                </span>
+                            @elseif($statusColor === 'yellow')
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs animate-pulse">
+                                    <svg class="w-3.5 h-3.5 mr-1 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    {{ $statusLabel }}
+                                </span>
+                            @elseif($statusColor === 'red')
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-800 border border-red-300 shadow-xs">
+                                    <svg class="w-3.5 h-3.5 mr-1 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    {{ $statusLabel }}
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300">
+                                    {{ $statusLabel }}
+                                </span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ $doc->updated_at->diffForHumans() }}
@@ -97,9 +116,9 @@
                                                     <form action="{{ route('approvals.approve', $doc) }}" method="POST" class="mb-4">
                                                         @csrf
                                                         <label class="block text-sm font-medium text-gray-700 mb-1">Catatan Persetujuan (Opsional)</label>
-                                                        <textarea name="notes" rows="2" class="shadow-sm focus:ring-green-500 focus:border-green-500 mt-1 block w-full sm:text-sm border border-gray-300 rounded-md"></textarea>
-                                                        <button type="submit" class="mt-2 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:text-sm">
-                                                            Setujui Dokumen
+                                                        <textarea name="notes" rows="2" class="shadow-sm focus:ring-emerald-500 focus:border-emerald-500 mt-1 block w-full sm:text-sm border border-gray-300 rounded-md"></textarea>
+                                                        <button type="submit" class="mt-2 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 sm:text-sm shadow-xs">
+                                                            ✓ Setujui Dokumen (ACC)
                                                         </button>
                                                     </form>
                                                     

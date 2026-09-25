@@ -212,6 +212,24 @@ class Folder extends Model
         return $user->isAdmin() && $this->created_by === $user->id;
     }
 
+    public function canUploadTo(?User $user): bool
+    {
+        if (!$user || !$user->canUploadDocuments()) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        $effectiveDept = $this->getEffectiveDepartment();
+        if ($effectiveDept) {
+            return $user->matchesDepartment($effectiveDept);
+        }
+
+        return $user->id === $this->created_by;
+    }
+
     public function scopeAccessible($query, ?User $user)
     {
         if (!$user) {

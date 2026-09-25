@@ -93,6 +93,11 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || in_array($this->role, [self::ROLE_ADMIN, 'biro', 'reviewer']);
     }
 
+    public function isAdminProdi(): bool
+    {
+        return $this->isSuperAdmin() || ($this->isAdmin() && $this->matchesDepartment('Program Studi Teknologi Informasi'));
+    }
+
     public function isReviewer(): bool
     {
         return $this->isAdmin();

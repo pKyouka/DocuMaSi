@@ -12,9 +12,20 @@ class SearchController extends Controller
 {
     public function index(Request $request)
     {
-        // Viewer only sees published documents that are not archived
+        $user = auth()->user();
+        // Viewer only sees published documents that are not archived and approved
         $query = Document::with(['category', 'creator', 'latestVersion'])
             ->forViewer();
+
+        if ($user && $user->isUser() && $user->matchesDepartment('Program Studi Teknologi Informasi')) {
+            $query->where(function ($q) {
+                $q->whereIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                  ->orWhere(function ($bq) {
+                      $bq->whereNotIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                         ->where('prodi_approval_status', 'approved');
+                  });
+            });
+        }
 
         // 1. Search keyword
         if ($request->filled('q')) {

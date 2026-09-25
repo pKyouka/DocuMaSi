@@ -48,8 +48,26 @@ class FolderController extends Controller
             }
 
             // If guest or viewer, only show published documents
-            if (!$user || $user->isUser()) {
+            if (!$user) {
                 $documentsQuery->forViewer();
+            } elseif ($user->isUser()) {
+                $documentsQuery->where(function ($q) use ($user) {
+                    $q->where('created_by', $user->id)
+                      ->orWhere(function ($vq) use ($user) {
+                          $vq->where('visibility', Document::VISIBILITY_VIEWER)
+                             ->where('status', Document::STATUS_APPROVED);
+
+                          if ($user->matchesDepartment('Program Studi Teknologi Informasi')) {
+                              $vq->where(function ($sq) {
+                                  $sq->whereIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                                     ->orWhere(function ($bq) {
+                                         $bq->whereNotIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                                            ->where('prodi_approval_status', 'approved');
+                                     });
+                              });
+                          }
+                      });
+                });
             }
         } else {
             // Root View
@@ -83,8 +101,26 @@ class FolderController extends Controller
                     });
             }
 
-            if (!$user || $user->isUser()) {
+            if (!$user) {
                 $documentsQuery->forViewer();
+            } elseif ($user->isUser()) {
+                $documentsQuery->where(function ($q) use ($user) {
+                    $q->where('created_by', $user->id)
+                      ->orWhere(function ($vq) use ($user) {
+                          $vq->where('visibility', Document::VISIBILITY_VIEWER)
+                             ->where('status', Document::STATUS_APPROVED);
+
+                          if ($user->matchesDepartment('Program Studi Teknologi Informasi')) {
+                              $vq->where(function ($sq) {
+                                  $sq->whereIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                                     ->orWhere(function ($bq) {
+                                         $bq->whereNotIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                                            ->where('prodi_approval_status', 'approved');
+                                     });
+                              });
+                          }
+                      });
+                });
             }
         }
 
@@ -134,6 +170,31 @@ class FolderController extends Controller
             }
         }
 
+        $pendingApprovalsCount = 0;
+        if ($user && $user->canApproveDocuments()) {
+            $approvalQuery = Document::query();
+            if ($user->isAdminProdi()) {
+                $approvalQuery->where(function($q) {
+                    $q->where(function($pq) {
+                        $pq->whereIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                           ->whereIn('status', [Document::STATUS_SUBMITTED, Document::STATUS_REVIEW]);
+                    })->orWhere(function($sq) {
+                        $sq->whereNotIn('department', ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])
+                           ->where('prodi_approval_status', 'pending');
+                    });
+                });
+            } elseif (!$user->isSuperAdmin() && $user->department) {
+                $approvalQuery->where('department', $user->department)
+                    ->whereIn('status', [Document::STATUS_SUBMITTED, Document::STATUS_REVIEW]);
+            } else {
+                $approvalQuery->where(function($q) {
+                    $q->whereIn('status', [Document::STATUS_SUBMITTED, Document::STATUS_REVIEW])
+                      ->orWhere('prodi_approval_status', 'pending');
+                });
+            }
+            $pendingApprovalsCount = $approvalQuery->count();
+        }
+
         return view('folders.index', compact(
             'currentFolder',
             'breadcrumbs',
@@ -141,7 +202,8 @@ class FolderController extends Controller
             'documents',
             'categories',
             'folderTree',
-            'allAccessibleFolders'
+            'allAccessibleFolders',
+            'pendingApprovalsCount'
         ));
     }
 
@@ -306,6 +368,22 @@ class FolderController extends Controller
         $sharedDepts = $validated['shared_departments'] ?? [];
         $folder->update(['shared_departments' => $sharedDepts]);
 
+        $isSharedToProdi = in_array('Program Studi Teknologi Informasi', $sharedDepts) || in_array('PSTI', $sharedDepts);
+        $isFromOutsideProdi = !in_array($folder->getEffectiveDepartment(), ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI']);
+
+        if ($isFromOutsideProdi && $isSharedToProdi) {
+            Document::where('folder_id', $folder->id)
+                ->where(function($q) {
+                    $q->whereNull('prodi_approval_status')
+                      ->orWhere('prodi_approval_status', 'pending');
+                })
+                ->update(['prodi_approval_status' => 'pending']);
+        } elseif ($isFromOutsideProdi && !$isSharedToProdi) {
+            Document::where('folder_id', $folder->id)
+                ->where('prodi_approval_status', 'pending')
+                ->update(['prodi_approval_status' => null]);
+        }
+
         AuditLog::log(
             'folder_shared',
             "Izin akses folder '{$folder->name}' diperbarui ke: " . (empty($sharedDepts) ? 'Hanya unit pemilik' : implode(', ', $sharedDepts)),
@@ -333,7 +411,7 @@ class FolderController extends Controller
         $folderId = $request->folder_id ?? ($folder ? $folder->id : null);
         $targetFolder = $folderId ? Folder::find($folderId) : null;
         if ($targetFolder) {
-            abort_unless($targetFolder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat mengunggah berkas ke folder ini.');
+            abort_unless($targetFolder->canUploadTo($user), 403, 'Akses ditolak: Anda tidak memiliki izin mengunggah berkas ke folder ini.');
             $department = $targetFolder->getEffectiveDepartment();
         } else {
             $department = $user->department;
@@ -346,6 +424,22 @@ class FolderController extends Controller
 
         $category = Category::firstOrCreate(['name' => 'Umum'], ['slug' => 'umum', 'is_active' => true]);
 
+        // Logic approval:
+        // Jika admin prodi / superadmin / admin unit: langsung ACC (approved).
+        // Jika user biasa: submitted (menunggu verifikasi admin prodi).
+        $isUserUploader = $user->isUser();
+        $status = $isUserUploader ? Document::STATUS_SUBMITTED : Document::STATUS_APPROVED;
+        $prodiStatus = null;
+        if (!$isUserUploader && ($user->isAdminProdi() || $user->isSuperAdmin())) {
+            $prodiStatus = 'approved';
+        }
+        if ($targetFolder) {
+            $isFolderSharedToProdi = in_array('Program Studi Teknologi Informasi', $targetFolder->getEffectiveSharedDepartments()) || in_array('PSTI', $targetFolder->getEffectiveSharedDepartments());
+            if ($isFolderSharedToProdi && !in_array($department, ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])) {
+                $prodiStatus = 'pending';
+            }
+        }
+
         $doc = Document::create([
             'name' => $name,
             'category_id' => $category->id,
@@ -354,11 +448,14 @@ class FolderController extends Controller
             'display_date' => now()->toDateString(),
             'document_date' => now()->toDateString(),
             'upload_date' => now()->toDateString(),
-            'status' => Document::STATUS_APPROVED,
+            'status' => $status,
+            'prodi_approval_status' => $prodiStatus,
             'visibility' => Document::VISIBILITY_VIEWER,
             'is_downloadable' => true,
             'current_version' => 1,
             'created_by' => $user->id,
+            'approved_by' => $isUserUploader ? null : $user->id,
+            'approved_at' => $isUserUploader ? null : now(),
         ]);
 
         DocumentVersion::create([
@@ -372,21 +469,34 @@ class FolderController extends Controller
             'notes' => 'Quick upload drag and drop',
         ]);
 
+        if ($isUserUploader) {
+            \App\Models\DocumentApproval::create([
+                'document_id' => $doc->id,
+                'user_id' => $user->id,
+                'status' => 'submitted',
+                'notes' => 'Dokumen diunggah oleh pengguna dan menunggu verifikasi Admin Prodi.',
+            ]);
+        }
+
         AuditLog::log(
             'document_created',
-            "Dokumen '{$doc->name}' berhasil diunggah via drag-and-drop.",
+            "Dokumen '{$doc->name}' berhasil diunggah" . ($isUserUploader ? " (menunggu verifikasi Admin Prodi)." : " (langsung disetujui)."),
             Document::class,
             $doc->id
         );
 
+        $msg = $isUserUploader
+            ? "Berkas '{$originalFilename}' berhasil diunggah dan sedang menunggu verifikasi Admin Prodi."
+            : "Berkas '{$originalFilename}' berhasil diunggah.";
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => "Berkas '{$originalFilename}' berhasil diunggah.",
+                'message' => $msg,
                 'document' => $doc->load(['category', 'latestVersion']),
             ]);
         }
 
-        return back()->with('success', "Berkas '{$originalFilename}' berhasil diunggah.");
+        return back()->with('success', $msg);
     }
 }

@@ -142,6 +142,75 @@
             }
         },
 
+        async quickApproveDoc(doc) {
+            if (!confirm(`Setujui (ACC) dokumen "${doc.name}"? Dokumen ini akan langsung terbit dan dapat diakses pengguna.`)) return;
+            try {
+                const response = await fetch(`/approvals/${doc.uuid || doc.id}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        notes: 'Disetujui via File Explorer'
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message || 'Dokumen berhasil di-ACC.');
+                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
+                        this.activeDoc.status = 'approved';
+                        this.activeDoc.status_label = 'Disetujui (ACC)';
+                        this.activeDoc.status_color = 'green';
+                        this.activeDoc.needs_acc = false;
+                    }
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    alert(data.message || 'Gagal menyetujui dokumen.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat memproses approval.');
+            }
+        },
+
+        async quickRejectDoc(doc) {
+            const notes = prompt(`Masukkan catatan revisi untuk "${doc.name}":`);
+            if (notes === null) return;
+            if (!notes.trim()) {
+                alert('Catatan revisi wajib diisi.');
+                return;
+            }
+            try {
+                const response = await fetch(`/approvals/${doc.uuid || doc.id}/revision`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ notes })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message || 'Permintaan revisi berhasil dikirim.');
+                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
+                        this.activeDoc.status = 'revision';
+                        this.activeDoc.status_label = 'Perlu Revisi';
+                        this.activeDoc.status_color = 'red';
+                        this.activeDoc.needs_acc = false;
+                    }
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    alert(data.message || 'Gagal mengirim revisi.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat memproses revisi.');
+            }
+        },
+
         openShare(type, item) {
             this.closeContextMenu();
             this.shareModal.type = type;
@@ -654,6 +723,15 @@
                         <x-google-drive-icon class="w-3.5 h-3.5 shrink-0" />
                         Google Drive
                     </a>
+                    @if(auth()->check() && auth()->user()->canApproveDocuments())
+                    <a href="{{ route('approvals.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('approvals.*') ? 'bg-[#f1b500] text-[#002147] font-bold' : 'text-white/80 hover:text-white hover:bg-white/10' }} transition-colors flex items-center gap-1.5" title="Panel Verifikasi &amp; Approval Dokumen">
+                        <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Panel Approval</span>
+                        @if(($pendingApprovalsCount ?? 0) > 0)
+                        <span class="bg-amber-400 text-[#002147] font-black text-[10px] px-1.5 py-0.2 rounded-full shadow-xs">{{ $pendingApprovalsCount }}</span>
+                        @endif
+                    </a>
+                    @endif
                 </nav>
             </div>
 
@@ -675,7 +753,9 @@
                     <svg class="w-3.5 h-3.5 mr-1.5 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
                     + Folder
                 </button>
+                @endif
 
+                @if(!$currentFolder || $currentFolder->canUploadTo(auth()->user()))
                 <!-- Hidden File Input for Instant Upload -->
                 <input type="file" x-ref="quickFileInput" @change="uploadFiles($event.target.files, '{{ $currentFolder ? $currentFolder->id : '' }}')" multiple class="hidden">
 
@@ -736,6 +816,18 @@
                             <x-google-drive-icon class="w-4 h-4 mr-2 shrink-0" />
                             Google Drive (Cloud)
                         </a>
+
+                        @if(auth()->user()->canApproveDocuments())
+                        <a href="{{ route('approvals.index') }}" class="flex items-center justify-between px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
+                            <span class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Panel Approval
+                            </span>
+                            @if(($pendingApprovalsCount ?? 0) > 0)
+                            <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">{{ $pendingApprovalsCount }}</span>
+                            @endif
+                        </a>
+                        @endif
 
                         @if(auth()->user()->canManageUsers())
                         <a href="{{ route('users.index') }}" class="flex items-center px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-medium">
@@ -1008,6 +1100,11 @@
                                         ($doc->department && auth()->user()->matchesDepartment($doc->department))
                                     );
                                     $isDocShared = $doc->isSharedFromOtherDepartment(auth()->user());
+                                    $displayStatus = $doc->getDisplayStatusForUser(auth()->user());
+                                    $displayStatusLabel = $doc->getDisplayStatusLabelForUser(auth()->user());
+                                    $displayStatusColor = $doc->getDisplayStatusColorForUser(auth()->user());
+                                    $needsProdiAcc = auth()->check() && (auth()->user()->isAdminProdi() || auth()->user()->isSuperAdmin()) && $doc->needsProdiApproval(auth()->user());
+
                                     $docPayload = [
                                         'id' => $doc->id,
                                         'uuid' => $doc->uuid,
@@ -1018,6 +1115,10 @@
                                         'date' => $doc->effective_display_date ? $doc->effective_display_date->format('d F Y') : '-',
                                         'raw_date' => $doc->effective_display_date ? $doc->effective_display_date->format('Y-m-d') : date('Y-m-d'),
                                         'visibility' => $doc->visibility_label,
+                                        'status' => $displayStatus,
+                                        'status_label' => $displayStatusLabel,
+                                        'status_color' => $displayStatusColor,
+                                        'needs_acc' => $needsProdiAcc,
                                         'is_downloadable' => (bool)$doc->is_downloadable,
                                         'shared_departments' => $doc->shared_departments ?? [],
                                         'file_size' => $doc->latestVersion ? $doc->latestVersion->file_size_formatted : '-',
@@ -1098,6 +1199,34 @@
                                             </div>
                                         @endif
 
+                                        <!-- Status Badge Top Left -->
+                                        @if(auth()->check() && auth()->user()->isAdmin())
+                                            @if($displayStatusColor === 'green')
+                                                <span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded shadow-xs bg-emerald-600 text-white flex items-center gap-1 backdrop-blur-xs">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                                    ACC
+                                                </span>
+                                            @elseif($displayStatusColor === 'yellow')
+                                                <span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded shadow-xs bg-amber-500 text-white flex items-center gap-1 backdrop-blur-xs animate-pulse">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                    Menunggu ACC
+                                                </span>
+                                            @elseif($displayStatusColor === 'red')
+                                                <span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded shadow-xs bg-red-600 text-white flex items-center gap-1 backdrop-blur-xs">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    Revisi
+                                                </span>
+                                            @else
+                                                <span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded shadow-xs bg-gray-600 text-white backdrop-blur-xs">
+                                                    Draft
+                                                </span>
+                                            @endif
+                                        @elseif(auth()->check() && auth()->user()->isUser() && $doc->created_by === auth()->id() && $displayStatusColor !== 'green')
+                                            <span class="absolute top-2 left-2 text-[9px] font-medium px-2 py-0.5 rounded shadow-xs bg-amber-100 text-amber-900 border border-amber-300">
+                                                Menunggu Verifikasi
+                                            </span>
+                                        @endif
+
                                         <!-- Visibility Tag Top Right -->
                                         <span class="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs backdrop-blur-xs {{ $doc->visibility === 'viewer' ? 'bg-green-600/90 text-white' : ($doc->visibility === 'internal' ? 'bg-blue-600/90 text-white' : 'bg-gray-800/90 text-white') }}">
                                             {{ $doc->visibility_label }}
@@ -1136,6 +1265,12 @@
                                         <div class="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
                                             <span>v{{ $doc->current_version }} &bull; {{ $doc->latestVersion ? $doc->latestVersion->file_size_formatted : '' }}</span>
                                             <div class="flex items-center gap-1.5">
+                                                @if($needsProdiAcc)
+                                                <button type="button" @click.stop="quickApproveDoc({{ json_encode($docPayload) }})" class="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded shadow-xs flex items-center gap-0.5 transition-colors cursor-pointer" title="ACC Dokumen">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                                    <span>ACC</span>
+                                                </button>
+                                                @endif
                                                 @if($canManageDoc)
                                                 <button @click.stop="openShare('document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-emerald-600 p-1 rounded-md hover:bg-emerald-50 transition-colors" title="Bagikan Dokumen">
                                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
@@ -1168,6 +1303,9 @@
                                         <tr>
                                             <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Nama Berkas</th>
                                             <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kategori</th>
+                                            @if(auth()->check() && auth()->user()->isAdmin())
+                                            <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                            @endif
                                             <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Visibilitas</th>
                                             <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tanggal Tampil</th>
                                             <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Aksi</th>
@@ -1182,6 +1320,11 @@
                                                 ($doc->department && auth()->user()->matchesDepartment($doc->department))
                                             );
                                             $isDocShared = $doc->isSharedFromOtherDepartment(auth()->user());
+                                            $displayStatus = $doc->getDisplayStatusForUser(auth()->user());
+                                            $displayStatusLabel = $doc->getDisplayStatusLabelForUser(auth()->user());
+                                            $displayStatusColor = $doc->getDisplayStatusColorForUser(auth()->user());
+                                            $needsProdiAcc = auth()->check() && (auth()->user()->isAdminProdi() || auth()->user()->isSuperAdmin()) && $doc->needsProdiApproval(auth()->user());
+
                                             $docPayload = [
                                                 'id' => $doc->id,
                                                 'uuid' => $doc->uuid,
@@ -1192,6 +1335,10 @@
                                                 'date' => $doc->effective_display_date ? $doc->effective_display_date->format('d F Y') : '-',
                                                 'raw_date' => $doc->effective_display_date ? $doc->effective_display_date->format('Y-m-d') : date('Y-m-d'),
                                                 'visibility' => $doc->visibility_label,
+                                                'status' => $displayStatus,
+                                                'status_label' => $displayStatusLabel,
+                                                'status_color' => $displayStatusColor,
+                                                'needs_acc' => $needsProdiAcc,
                                                 'is_downloadable' => (bool)$doc->is_downloadable,
                                                 'shared_departments' => $doc->shared_departments ?? [],
                                                 'file_size' => $doc->latestVersion ? $doc->latestVersion->file_size_formatted : '-',
@@ -1217,6 +1364,30 @@
                                                 @endif
                                             </td>
                                             <td class="px-5 py-3 text-xs text-gray-600">{{ $doc->category->name ?? '-' }}</td>
+                                            @if(auth()->check() && auth()->user()->isAdmin())
+                                            <td class="px-5 py-3 text-xs whitespace-nowrap">
+                                                @if($displayStatusColor === 'green')
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                        <svg class="w-2.5 h-2.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                                        ACC
+                                                    </span>
+                                                @elseif($displayStatusColor === 'yellow')
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                                        <svg class="w-2.5 h-2.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                        Menunggu ACC
+                                                    </span>
+                                                @elseif($displayStatusColor === 'red')
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">
+                                                        <svg class="w-2.5 h-2.5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                        Revisi
+                                                    </span>
+                                                @else
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
+                                                        Draft
+                                                    </span>
+                                                @endif
+                                            </td>
+                                            @endif
                                             <td class="px-5 py-3 text-xs">
                                                 <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold {{ $doc->visibility === 'viewer' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800' }}">
                                                     {{ $doc->visibility_label }}
@@ -1225,6 +1396,12 @@
                                             <td class="px-5 py-3 text-xs text-gray-600">{{ $doc->effective_display_date ? $doc->effective_display_date->format('d M Y') : '-' }}</td>
                                             <td class="px-5 py-3 text-xs text-right whitespace-nowrap">
                                                 <div class="flex items-center justify-end gap-1">
+                                                    @if($needsProdiAcc)
+                                                    <button type="button" @click.stop="quickApproveDoc({{ json_encode($docPayload) }})" class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition-colors shadow-xs" title="ACC Dokumen Ini">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                                        <span>ACC</span>
+                                                    </button>
+                                                    @endif
                                                     @if($canManageDoc)
                                                     <button @click.stop="openShare('document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-emerald-600 p-1 rounded hover:bg-gray-100" title="Bagikan">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
@@ -1242,7 +1419,7 @@
                                         </tr>
                                         @empty
                                         <tr>
-                                            <td colspan="5" class="px-5 py-8 text-center text-xs text-gray-400">Tidak ada berkas.</td>
+                                            <td colspan="{{ auth()->check() && auth()->user()->isAdmin() ? '6' : '5' }}" class="px-5 py-8 text-center text-xs text-gray-400">Tidak ada berkas.</td>
                                         </tr>
                                         @endforelse
                                     </tbody>
@@ -1295,6 +1472,36 @@
                         </div>
 
                         <div class="space-y-2.5 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                            @if(auth()->check() && auth()->user()->isAdmin())
+                            <div>
+                                <span class="text-gray-400 text-[10px] block uppercase font-semibold">Status Persetujuan</span>
+                                <div class="mt-1">
+                                    <template x-if="activeDoc.status_color === 'green'">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">
+                                            <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                            <span x-text="activeDoc.status_label"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="activeDoc.status_color === 'yellow'">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs animate-pulse">
+                                            <svg class="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            <span x-text="activeDoc.status_label"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="activeDoc.status_color === 'red'">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-800 border border-red-300 shadow-xs">
+                                            <svg class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            <span x-text="activeDoc.status_label"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="activeDoc.status_color === 'gray'">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700">
+                                            <span x-text="activeDoc.status_label"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            @endif
                             <div>
                                 <span class="text-gray-400 text-[10px] block uppercase font-semibold">Unit / Biro</span>
                                 <span class="font-semibold text-gray-800" x-text="activeDoc.department"></span>
@@ -1328,6 +1535,22 @@
 
                         <!-- Action Buttons in Inspector -->
                         <div class="pt-2 space-y-2">
+                            <template x-if="activeDoc.needs_acc">
+                                <div class="space-y-1.5 p-2.5 bg-amber-50 rounded-xl border border-amber-200">
+                                    <div class="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        Dokumen Menunggu Verifikasi
+                                    </div>
+                                    <button type="button" @click="quickApproveDoc(activeDoc)" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold transition-colors shadow-xs cursor-pointer">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                        ACC Dokumen (Setujui)
+                                    </button>
+                                    <button type="button" @click="quickRejectDoc(activeDoc)" class="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 hover:bg-red-50 text-red-700 rounded-lg font-semibold transition-colors cursor-pointer">
+                                        <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        Minta Revisi / Tolak
+                                    </button>
+                                </div>
+                            </template>
                             <template x-if="activeDoc.can_manage">
                                 <button @click="openShare('document', activeDoc)" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#f1b500] hover:bg-[#e5a800] text-[#002147] rounded-lg font-bold transition-colors shadow-xs">
                                     <svg class="w-3.5 h-3.5 text-[#002147]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
@@ -1519,6 +1742,21 @@
                         <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                         <span class="truncate" x-text="contextMenu.item.name"></span>
                     </div>
+
+                    @if(auth()->check() && (auth()->user()->isAdminProdi() || auth()->user()->isSuperAdmin()))
+                    <template x-if="contextMenu.item.needs_acc">
+                        <div class="py-1 bg-amber-50/70 border-b border-amber-200">
+                            <button type="button" @click="quickApproveDoc(contextMenu.item); closeContextMenu();" class="w-full text-left px-3.5 py-2 text-emerald-800 hover:bg-emerald-100 flex items-center gap-2.5 font-bold transition-colors cursor-pointer">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                <span>ACC Dokumen (Setujui)</span>
+                            </button>
+                            <button type="button" @click="quickRejectDoc(contextMenu.item); closeContextMenu();" class="w-full text-left px-3.5 py-2 text-red-700 hover:bg-red-100 flex items-center gap-2.5 font-medium transition-colors cursor-pointer">
+                                <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                <span>Minta Revisi / Tolak...</span>
+                            </button>
+                        </div>
+                    </template>
+                    @endif
 
                     <div class="py-1">
                         <a :href="contextMenu.item.preview_url" target="_blank" @click="closeContextMenu()" class="w-full text-left px-3.5 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">

@@ -85,7 +85,7 @@ class DocumentController extends Controller
         // Validate folder permission
         if (!empty($validated['folder_id'])) {
             $targetFolder = Folder::findOrFail($validated['folder_id']);
-            abort_unless($targetFolder->canManage($user), 403, 'Akses ditolak: Hanya unit pemilik yang dapat menambahkan dokumen ke folder ini.');
+            abort_unless($targetFolder->canUploadTo($user), 403, 'Akses ditolak: Anda tidak memiliki izin mengunggah berkas ke folder ini.');
             if (empty($validated['department'])) {
                 $validated['department'] = $targetFolder->getEffectiveDepartment();
             }
@@ -102,6 +102,25 @@ class DocumentController extends Controller
         $tags = null;
         if (!empty($validated['tags'])) {
             $tags = array_map('trim', explode(',', $validated['tags']));
+        }
+
+        // Logic approval:
+        // Jika user biasa: status = submitted (menunggu verifikasi admin prodi).
+        // Jika admin prodi / superadmin / admin unit: langsung ACC (approved).
+        $isUserUploader = $user->isUser();
+        $status = $isUserUploader ? Document::STATUS_SUBMITTED : Document::STATUS_APPROVED;
+        $prodiStatus = null;
+        if (!$isUserUploader && ($user->isAdminProdi() || $user->isSuperAdmin())) {
+            $prodiStatus = 'approved';
+        }
+        if (!empty($validated['folder_id'])) {
+            $targetFolder = Folder::find($validated['folder_id']);
+            if ($targetFolder) {
+                $isFolderSharedToProdi = in_array('Program Studi Teknologi Informasi', $targetFolder->getEffectiveSharedDepartments()) || in_array('PSTI', $targetFolder->getEffectiveSharedDepartments());
+                if ($isFolderSharedToProdi && !in_array($validated['department'], ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])) {
+                    $prodiStatus = 'pending';
+                }
+            }
         }
 
         $document = Document::create([
@@ -122,11 +141,14 @@ class DocumentController extends Controller
             'upload_date' => now()->toDateString(),
             'original_uploaded_at' => now(),
             'actual_uploaded_at' => now(),
-            'status' => $validated['visibility'] === 'viewer' ? Document::STATUS_APPROVED : Document::STATUS_DRAFT,
+            'status' => $status,
+            'prodi_approval_status' => $prodiStatus,
             'visibility' => $validated['visibility'],
             'is_downloadable' => $request->boolean('is_downloadable', true),
             'current_version' => 1,
             'created_by' => $user->id,
+            'approved_by' => $isUserUploader ? null : $user->id,
+            'approved_at' => $isUserUploader ? null : now(),
         ]);
 
         DocumentVersion::create([
@@ -140,20 +162,33 @@ class DocumentController extends Controller
             'notes' => 'Upload awal',
         ]);
 
+        if ($isUserUploader) {
+            \App\Models\DocumentApproval::create([
+                'document_id' => $document->id,
+                'user_id' => $user->id,
+                'status' => 'submitted',
+                'notes' => 'Dokumen diunggah oleh pengguna dan menunggu verifikasi Admin Prodi.',
+            ]);
+        }
+
         AuditLog::log(
             'document_created',
-            "Dokumen '{$document->name}' berhasil dibuat dengan visibilitas {$document->visibility_label}.",
+            "Dokumen '{$document->name}' berhasil dibuat" . ($isUserUploader ? " (menunggu verifikasi Admin Prodi)." : " dengan visibilitas {$document->visibility_label}."),
             Document::class,
             $document->id,
         );
 
+        $flashMsg = $isUserUploader
+            ? 'Dokumen berhasil diunggah dan sedang menunggu verifikasi Admin Prodi.'
+            : 'Dokumen berhasil ditambahkan.';
+
         if (!empty($document->folder_id)) {
             return redirect()->route('folders.index', ['folder_id' => $document->folder_id])
-                ->with('success', 'Dokumen berhasil ditambahkan ke folder.');
+                ->with('success', $flashMsg);
         }
 
         return redirect()->route('documents.show', $document)
-            ->with('success', 'Dokumen berhasil ditambahkan.');
+            ->with('success', $flashMsg);
     }
 
     public function show(Document $document)
@@ -337,7 +372,19 @@ class DocumentController extends Controller
         ]);
 
         $sharedDepts = $validated['shared_departments'] ?? [];
-        $doc->update(['shared_departments' => $sharedDepts]);
+        $isSharedToProdi = in_array('Program Studi Teknologi Informasi', $sharedDepts) || in_array('PSTI', $sharedDepts);
+        $isFromOutsideProdi = !in_array($doc->department, ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI']);
+
+        $updateData = ['shared_departments' => $sharedDepts];
+        if ($isFromOutsideProdi && $isSharedToProdi) {
+            if ($doc->prodi_approval_status !== 'approved') {
+                $updateData['prodi_approval_status'] = 'pending';
+            }
+        } elseif ($isFromOutsideProdi && !$isSharedToProdi) {
+            $updateData['prodi_approval_status'] = null;
+        }
+
+        $doc->update($updateData);
 
         AuditLog::log(
             'document_shared',

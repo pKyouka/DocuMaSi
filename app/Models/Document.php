@@ -79,6 +79,9 @@ class Document extends Model
         'original_uploaded_at',
         'actual_uploaded_at',
         'status',
+        'prodi_approval_status',
+        'prodi_approved_by',
+        'prodi_approved_at',
         'visibility',
         'shared_departments',
         'is_downloadable',
@@ -97,6 +100,7 @@ class Document extends Model
         'original_uploaded_at' => 'datetime',
         'actual_uploaded_at' => 'datetime',
         'approved_at' => 'datetime',
+        'prodi_approved_at' => 'datetime',
         'archived_at' => 'datetime',
         'is_downloadable' => 'boolean',
         'shared_departments' => 'array',
@@ -145,6 +149,11 @@ class Document extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function prodiApprover()
+    {
+        return $this->belongsTo(User::class, 'prodi_approved_by');
     }
 
     public function versions()
@@ -234,6 +243,85 @@ class Document extends Model
         return $this->department && !$user->matchesDepartment($this->department);
     }
 
+    public function isFromOutsideProdi(): bool
+    {
+        if (!$this->department) {
+            return false;
+        }
+        return !in_array($this->department, ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI']);
+    }
+
+    public function isSharedToProdi(): bool
+    {
+        $shared = $this->getEffectiveSharedDepartments();
+        return !empty(array_intersect($shared, ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI']));
+    }
+
+    public function getDisplayStatusForUser(?User $user): string
+    {
+        if ($this->isFromOutsideProdi() && $this->isSharedToProdi()) {
+            if ($user && $user->matchesDepartment('Program Studi Teknologi Informasi')) {
+                return $this->prodi_approval_status ?? 'pending';
+            }
+        }
+
+        return $this->status;
+    }
+
+    public function getDisplayStatusLabelForUser(?User $user): string
+    {
+        $status = $this->getDisplayStatusForUser($user);
+        if ($status === 'approved' || $status === self::STATUS_APPROVED) {
+            return 'Disetujui (ACC)';
+        }
+        if ($status === 'pending' || $status === self::STATUS_SUBMITTED || $status === self::STATUS_REVIEW) {
+            return 'Menunggu ACC';
+        }
+        if ($status === 'rejected' || $status === self::STATUS_REVISION) {
+            return 'Perlu Revisi';
+        }
+        return self::STATUSES[$status] ?? ucfirst($status);
+    }
+
+    public function getDisplayStatusColorForUser(?User $user): string
+    {
+        $status = $this->getDisplayStatusForUser($user);
+        if ($status === 'approved' || $status === self::STATUS_APPROVED) {
+            return 'green';
+        }
+        if ($status === 'pending' || $status === self::STATUS_SUBMITTED || $status === self::STATUS_REVIEW) {
+            return 'yellow';
+        }
+        if ($status === 'rejected' || $status === self::STATUS_REVISION) {
+            return 'red';
+        }
+        return 'gray';
+    }
+
+    public function isApprovedForUser(?User $user): bool
+    {
+        if ($this->isFromOutsideProdi() && $this->isSharedToProdi()) {
+            if ($user && $user->matchesDepartment('Program Studi Teknologi Informasi')) {
+                return ($this->prodi_approval_status ?? 'pending') === 'approved';
+            }
+        }
+
+        return $this->status === self::STATUS_APPROVED;
+    }
+
+    public function needsProdiApproval(?User $user = null): bool
+    {
+        if ($this->isFromOutsideProdi() && $this->isSharedToProdi()) {
+            return ($this->prodi_approval_status ?? 'pending') !== 'approved';
+        }
+
+        if (in_array($this->department, ['Program Studi Teknologi Informasi', 'PSTI', 'Program Studi PSTI'])) {
+            return in_array($this->status, [self::STATUS_SUBMITTED, self::STATUS_REVIEW]);
+        }
+
+        return in_array($this->status, [self::STATUS_SUBMITTED, self::STATUS_REVIEW]);
+    }
+
     public function canAccess(?User $user): bool
     {
         if (!$user) {
@@ -244,19 +332,38 @@ class Document extends Model
             return true;
         }
 
-        // Creator and owner department can always access
+        // Creator can always access their own document
         if ($this->created_by === $user->id) {
             return true;
         }
 
+        // If user is from Prodi and document is shared from outside Prodi:
+        if ($user->matchesDepartment('Program Studi Teknologi Informasi') && $this->isFromOutsideProdi() && $this->isSharedToProdi()) {
+            if ($user->isAdmin()) {
+                return true; // Admin Prodi can review and ACC
+            }
+            // Regular users of Prodi only access when approved
+            return ($this->prodi_approval_status ?? 'pending') === 'approved';
+        }
+
+        // Creator and owner department can access
         if ($this->department && $user->matchesDepartment($this->department)) {
-            return true;
+            if ($user->isAdmin()) {
+                return true;
+            }
+            // Regular user can access if approved
+            return $this->status === self::STATUS_APPROVED;
         }
 
         // Check explicit shared departments
         $shared = $this->getEffectiveSharedDepartments();
         if (!empty($shared)) {
-            return $user->isDepartmentSharedWith($shared);
+            if ($user->isDepartmentSharedWith($shared)) {
+                if ($user->isUser() && $user->matchesDepartment('Program Studi Teknologi Informasi') && $this->isFromOutsideProdi()) {
+                    return ($this->prodi_approval_status ?? 'pending') === 'approved';
+                }
+                return true;
+            }
         }
 
         // If from another department and not shared to user's department, deny access
@@ -264,8 +371,8 @@ class Document extends Model
             return false;
         }
 
-        // If visibility is viewer, all users can view
-        if ($this->visibility === self::VISIBILITY_VIEWER) {
+        // If visibility is viewer, only approved documents can be viewed
+        if ($this->visibility === self::VISIBILITY_VIEWER && $this->status === self::STATUS_APPROVED) {
             return true;
         }
 
@@ -275,7 +382,7 @@ class Document extends Model
     public function scopeForViewer($query)
     {
         return $query->where('visibility', self::VISIBILITY_VIEWER)
-            ->where('status', '!=', self::STATUS_ARCHIVED);
+            ->where('status', self::STATUS_APPROVED);
     }
 
     public function scopeActive($query)
