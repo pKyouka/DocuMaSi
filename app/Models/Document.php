@@ -131,6 +131,26 @@ class Document extends Model
         return 'uuid';
     }
 
+    public static function findByUuidOrId($identifier): ?self
+    {
+        if ($identifier instanceof self) {
+            return $identifier;
+        }
+        if (\Illuminate\Support\Str::isUuid((string) $identifier)) {
+            return static::where('uuid', (string) $identifier)->first();
+        }
+        return static::where('id', $identifier)->first();
+    }
+
+    public static function findByUuidOrIdOrFail($identifier): self
+    {
+        $doc = static::findByUuidOrId($identifier);
+        if (!$doc) {
+            abort(404, 'Dokumen tidak ditemukan.');
+        }
+        return $doc;
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);

@@ -240,15 +240,22 @@ class Folder extends Model
             return $query;
         }
 
-        if ($user->isAdmin() && $user->department) {
-            return $query->where(function ($q) use ($user) {
-                $q->where('department', $user->department)
-                  ->orWhereHas('parent', function ($pq) use ($user) {
-                      $pq->where('department', $user->department);
-                  });
-            });
-        }
+        $aliases = $user->getDepartmentAliases();
 
-        return $query->whereRaw('1 = 0');
+        return $query->where(function ($q) use ($aliases, $user) {
+            $q->where('created_by', $user->id);
+            if (!empty($aliases)) {
+                foreach ($aliases as $alias) {
+                    $q->orWhere('department', $alias)
+                      ->orWhere('shared_departments', 'like', '%"' . $alias . '"%');
+                }
+                $q->orWhereHas('parent', function ($pq) use ($aliases) {
+                    foreach ($aliases as $alias) {
+                        $pq->orWhere('department', $alias)
+                           ->orWhere('shared_departments', 'like', '%"' . $alias . '"%');
+                    }
+                });
+            }
+        });
     }
 }

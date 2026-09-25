@@ -320,7 +320,7 @@ class FolderController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->canUploadDocuments(), 403);
 
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $validated = $request->validate([
             'folder_id' => 'nullable|exists:folders,id',

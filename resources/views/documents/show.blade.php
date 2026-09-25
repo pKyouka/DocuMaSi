@@ -2,7 +2,7 @@
     <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <div class="flex items-center gap-2 mb-1">
-                <a href="{{ route('folders.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">&larr; Kembali ke File Explorer</a>
+                <a href="{{ $document->folder_id ? route('folders.index', ['folder_id' => $document->folder_id]) : route('folders.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">&larr; Kembali ke File Explorer</a>
             </div>
             <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-3">
                 {{ $document->name }}

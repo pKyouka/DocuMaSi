@@ -83,7 +83,7 @@ class ApprovalController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->canApproveDocuments(), 403, 'Akses ditolak.');
 
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $request->validate([
             'notes' => 'nullable|string|max:2000',
@@ -140,7 +140,7 @@ class ApprovalController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->canApproveDocuments(), 403, 'Akses ditolak.');
 
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $request->validate([
             'notes' => 'required|string|max:2000',
@@ -192,7 +192,7 @@ class ApprovalController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->canApproveDocuments(), 403, 'Akses ditolak.');
 
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $doc->update(['status' => Document::STATUS_REVIEW]);
 

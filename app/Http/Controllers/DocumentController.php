@@ -51,7 +51,9 @@ class DocumentController extends Controller
         if ($user->isSuperAdmin()) {
             $folders = Folder::orderBy('name')->get();
         } else {
-            $folders = Folder::accessible($user)->orderBy('name')->get();
+            $folders = Folder::orderBy('name')->get()->filter(function ($f) use ($user) {
+                return $f->canAccess($user) || $f->canUploadTo($user);
+            })->values();
         }
 
         $selectedFolderId = $request->get('folder_id');
@@ -210,7 +212,14 @@ class DocumentController extends Controller
         if ($user->isSuperAdmin()) {
             $folders = Folder::orderBy('name')->get();
         } else {
-            $folders = Folder::accessible($user)->orderBy('name')->get();
+            $folders = Folder::orderBy('name')->get()->filter(function ($f) use ($user) {
+                return $f->canAccess($user) || $f->canUploadTo($user);
+            })->values();
+        }
+
+        if ($document->folder && !$folders->contains('id', $document->folder_id)) {
+            $folders->push($document->folder);
+            $folders = $folders->sortBy('name')->values();
         }
 
         $auditLogs = AuditLog::where('model_type', Document::class)
@@ -245,8 +254,12 @@ class DocumentController extends Controller
             'status' => 'required|in:draft,submitted,review,revision,approved,archived',
         ]);
 
-        if (!empty($validated['folder_id'])) {
-            $targetFolder = Folder::findOrFail($validated['folder_id']);
+        $targetFolderId = $request->has('folder_id')
+            ? (!empty($validated['folder_id']) ? $validated['folder_id'] : null)
+            : $document->folder_id;
+
+        if (!empty($targetFolderId) && $targetFolderId != $document->folder_id) {
+            $targetFolder = Folder::findOrFail($targetFolderId);
             abort_unless($targetFolder->canAccess($user), 403, 'Akses ke folder tujuan ditolak.');
         }
 
@@ -261,7 +274,7 @@ class DocumentController extends Controller
             'name' => $validated['name'],
             'document_number' => $validated['document_number'] ?? null,
             'category_id' => $validated['category_id'],
-            'folder_id' => $validated['folder_id'] ?? null,
+            'folder_id' => $targetFolderId,
             'department' => $validated['department'],
             'academic_year' => $validated['academic_year'] ?? null,
             'semester' => $validated['semester'] ?? null,
@@ -284,6 +297,11 @@ class DocumentController extends Controller
             $oldValues,
             $document->only(['name', 'document_number', 'category_id', 'folder_id', 'display_date', 'visibility', 'status']),
         );
+
+        if (!empty($document->folder_id)) {
+            return redirect()->route('folders.index', ['folder_id' => $document->folder_id])
+                ->with('success', 'Dokumen berhasil diperbarui.');
+        }
 
         return redirect()->route('documents.show', $document)
             ->with('success', 'Dokumen berhasil diperbarui.');
@@ -360,7 +378,7 @@ class DocumentController extends Controller
     public function updateSharing(Request $request, $document)
     {
         $user = auth()->user();
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $isOwnerDept = $doc->department && $user->matchesDepartment($doc->department);
 
@@ -403,7 +421,7 @@ class DocumentController extends Controller
     public function updateDisplayDate(Request $request, $document)
     {
         $user = auth()->user();
-        $doc = $document instanceof Document ? $document : Document::where('uuid', $document)->orWhere('id', $document)->firstOrFail();
+        $doc = Document::findByUuidOrIdOrFail($document);
 
         $this->authorize('update', $doc);
 
@@ -431,6 +449,7 @@ class DocumentController extends Controller
             'message' => 'Tanggal tampil dokumen berhasil diperbarui.',
             'display_date' => $doc->effective_display_date->format('Y-m-d'),
             'display_date_formatted' => $doc->effective_display_date->format('d F Y'),
+            'folder_id' => $doc->folder_id,
         ]);
     }
 

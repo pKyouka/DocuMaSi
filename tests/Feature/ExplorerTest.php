@@ -395,6 +395,73 @@ class ExplorerTest extends TestCase
         $this->assertEquals($actualUploadedAt->toDateTimeString(), $document->actual_uploaded_at->toDateTimeString());
     }
 
+    public function test_updating_document_date_preserves_folder_location(): void
+    {
+        $adminAkademik = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Biro Akademik',
+        ]);
+
+        $folder = Folder::create([
+            'name' => 'Pedoman Akademik 2026',
+            'department' => 'Biro Akademik',
+            'created_by' => $adminAkademik->id,
+        ]);
+
+        $category = Category::create([
+            'name' => 'Pedoman',
+            'slug' => 'pedoman-folder-test',
+            'is_active' => true,
+        ]);
+
+        $document = Document::create([
+            'name' => 'Dokumen Pedoman',
+            'category_id' => $category->id,
+            'folder_id' => $folder->id,
+            'department' => 'Biro Akademik',
+            'document_date' => '2026-01-01',
+            'display_date' => '2026-01-01',
+            'upload_date' => '2026-01-01',
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'status' => Document::STATUS_APPROVED,
+            'created_by' => $adminAkademik->id,
+        ]);
+
+        // 1. Edit view includes the folder in select and marks it selected
+        $editResponse = $this->actingAs($adminAkademik)->get("/documents/{$document->uuid}/edit");
+        $editResponse->assertStatus(200);
+        $editResponse->assertSee('value="' . $folder->id . '"', false);
+
+        // 2. Update via documents.update (PUT) with new date
+        $updateResponse = $this->actingAs($adminAkademik)->put("/documents/{$document->uuid}", [
+            'name' => 'Dokumen Pedoman',
+            'category_id' => $category->id,
+            'folder_id' => $folder->id,
+            'department' => 'Biro Akademik',
+            'display_date' => '2026-09-25',
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'status' => Document::STATUS_APPROVED,
+        ]);
+
+        // Redirects back to folder index with folder_id
+        $updateResponse->assertRedirect(route('folders.index', ['folder_id' => $folder->id]));
+
+        $document->refresh();
+        $this->assertEquals('2026-09-25', $document->display_date->toDateString());
+        // Folder must NOT be reset to root!
+        $this->assertEquals($folder->id, $document->folder_id);
+
+        // 3. Update via display-date endpoint
+        $ajaxResponse = $this->actingAs($adminAkademik)->postJson("/documents/{$document->uuid}/display-date", [
+            'display_date' => '2026-10-10',
+        ]);
+        $ajaxResponse->assertStatus(200);
+
+        $document->refresh();
+        $this->assertEquals('2026-10-10', $document->display_date->toDateString());
+        $this->assertEquals($folder->id, $document->folder_id);
+    }
+
     public function test_shared_folder_inherits_to_child_folders_and_files_and_appears_in_sidebar_for_target_biro(): void
     {
         $adminPsti = User::factory()->create([

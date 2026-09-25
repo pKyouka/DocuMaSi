@@ -3,671 +3,7 @@
          @click="closeContextMenu()"
          @contextmenu="closeContextMenu()"
          @keydown.escape="closeContextMenu(); closeShareModal();"
-         x-data="{
-        viewMode: 'grid',
-        createFolderModal: false,
-        renameFolderModal: false,
-        moveDocModal: false,
-        previewModal: false,
-        inspectorOpen: false,
-        activeDoc: null,
-
-        editFolderId: null,
-        editFolderName: '',
-        moveDocId: null,
-        moveDocName: '',
-
-        // Context Menu (Right-click) State
-        contextMenu: {
-            show: false,
-            x: 0,
-            y: 0,
-            type: '',
-            item: null
-        },
-
-        // Edit Display Date Modal State
-        editDateModal: {
-            open: false,
-            id: null,
-            uuid: null,
-            name: '',
-            currentDate: '',
-            newDate: '',
-            isSaving: false
-        },
-
-        // Share Modal State
-        shareModal: {
-            open: false,
-            id: null,
-            uuid: null,
-            type: '',
-            title: '',
-            url: '',
-            department: '',
-            visibility: '',
-            selectedBiros: [],
-            isSaving: false,
-            saveStatus: '',
-            copied: false
-        },
-        permissionsCache: {
-            document: {},
-            folder: {}
-        },
-        saveTimeout: null,
-        allUnits: {{ Js::from(\App\Models\User::UNITS) }},
-
-        isDraggingFileOver: false,
-        draggedDocId: null,
-        hoveredFolderId: null,
-        isUploading: false,
-        uploadMessage: '',
-        toastMessage: '',
-        showToast: false,
-
-        triggerToast(msg) {
-            this.toastMessage = msg;
-            this.showToast = true;
-            setTimeout(() => { this.showToast = false; }, 3500);
-        },
-
-        openContextMenu(event, type, item) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.contextMenu.show = true;
-            this.contextMenu.type = type;
-            this.contextMenu.item = item;
-
-            const menuWidth = 220;
-            const menuHeight = 250;
-            const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
-            const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
-
-            this.contextMenu.x = Math.max(10, x);
-            this.contextMenu.y = Math.max(10, y);
-        },
-
-        closeContextMenu() {
-            this.contextMenu.show = false;
-        },
-
-        openEditDateModal(doc) {
-            this.closeContextMenu();
-            this.editDateModal.id = doc.id;
-            this.editDateModal.uuid = doc.uuid || doc.id;
-            this.editDateModal.name = doc.name;
-            this.editDateModal.currentDate = doc.raw_date || '';
-            this.editDateModal.newDate = doc.raw_date || '';
-            this.editDateModal.isSaving = false;
-            this.editDateModal.open = true;
-        },
-
-        async saveDisplayDate() {
-            if (!this.editDateModal.newDate) return;
-            this.editDateModal.isSaving = true;
-
-            try {
-                const response = await fetch(`/documents/${this.editDateModal.uuid || this.editDateModal.id}/display-date`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        display_date: this.editDateModal.newDate
-                    })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    this.triggerToast(data.message || 'Tanggal tampil berhasil diubah.');
-
-                    if (this.activeDoc && (this.activeDoc.id === this.editDateModal.id || this.activeDoc.uuid === this.editDateModal.uuid)) {
-                        this.activeDoc.date = data.display_date_formatted;
-                        this.activeDoc.raw_date = data.display_date;
-                    }
-
-                    this.editDateModal.open = false;
-                } else {
-                    alert(data.message || 'Gagal mengubah tanggal tampil.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Terjadi kesalahan saat mengubah tanggal tampil.');
-            } finally {
-                this.editDateModal.isSaving = false;
-            }
-        },
-
-        async quickApproveDoc(doc) {
-            if (!confirm(`Setujui (ACC) dokumen "${doc.name}"? Dokumen ini akan langsung terbit dan dapat diakses pengguna.`)) return;
-            try {
-                const response = await fetch(`/approvals/${doc.uuid || doc.id}/approve`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        notes: 'Disetujui via File Explorer'
-                    })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    this.triggerToast(data.message || 'Dokumen berhasil di-ACC.');
-                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
-                        this.activeDoc.status = 'approved';
-                        this.activeDoc.status_label = 'Disetujui (ACC)';
-                        this.activeDoc.status_color = 'green';
-                        this.activeDoc.needs_acc = false;
-                    }
-                    setTimeout(() => window.location.reload(), 600);
-                } else {
-                    alert(data.message || 'Gagal menyetujui dokumen.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Terjadi kesalahan saat memproses approval.');
-            }
-        },
-
-        async quickRejectDoc(doc) {
-            const notes = prompt(`Masukkan catatan revisi untuk "${doc.name}":`);
-            if (notes === null) return;
-            if (!notes.trim()) {
-                alert('Catatan revisi wajib diisi.');
-                return;
-            }
-            try {
-                const response = await fetch(`/approvals/${doc.uuid || doc.id}/revision`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ notes })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    this.triggerToast(data.message || 'Permintaan revisi berhasil dikirim.');
-                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
-                        this.activeDoc.status = 'revision';
-                        this.activeDoc.status_label = 'Perlu Revisi';
-                        this.activeDoc.status_color = 'red';
-                        this.activeDoc.needs_acc = false;
-                    }
-                    setTimeout(() => window.location.reload(), 600);
-                } else {
-                    alert(data.message || 'Gagal mengirim revisi.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Terjadi kesalahan saat memproses revisi.');
-            }
-        },
-
-        openShare(type, item) {
-            this.closeContextMenu();
-            this.shareModal.type = type;
-            this.shareModal.id = item.id;
-            this.shareModal.uuid = item.uuid || null;
-            this.shareModal.title = item.name;
-            this.shareModal.department = item.department || 'Umum';
-            this.shareModal.visibility = item.visibility || 'Tampil ke Viewer';
-            this.shareModal.copied = false;
-            this.shareModal.isSaving = false;
-            this.shareModal.saveStatus = '';
-
-            const key = (type === 'folder') ? item.id : (item.uuid || item.id);
-            if (this.permissionsCache[type] && this.permissionsCache[type][key] !== undefined) {
-                this.shareModal.selectedBiros = [...this.permissionsCache[type][key]];
-            } else if (Array.isArray(item.shared_departments)) {
-                this.shareModal.selectedBiros = [...item.shared_departments];
-                if (!this.permissionsCache[type]) this.permissionsCache[type] = {};
-                this.permissionsCache[type][key] = [...item.shared_departments];
-            } else {
-                this.shareModal.selectedBiros = [];
-            }
-
-            if (type === 'folder') {
-                this.shareModal.url = `${window.location.origin}/folders?folder_id=${item.id}`;
-            } else {
-                this.shareModal.url = item.preview_url || `${window.location.origin}/documents/${item.uuid}/preview`;
-            }
-            this.shareModal.open = true;
-        },
-
-        selectAllBiros() {
-            this.shareModal.selectedBiros = [...this.allUnits];
-            this.autoSavePermissions();
-        },
-
-        deselectAllBiros() {
-            this.shareModal.selectedBiros = [];
-            this.autoSavePermissions();
-        },
-
-        toggleBiro(biro) {
-            const index = this.shareModal.selectedBiros.indexOf(biro);
-            if (index > -1) {
-                this.shareModal.selectedBiros.splice(index, 1);
-            } else {
-                this.shareModal.selectedBiros.push(biro);
-            }
-            this.autoSavePermissions();
-        },
-
-        autoSavePermissions() {
-            this.shareModal.saveStatus = 'saving';
-            if (this.saveTimeout) {
-                clearTimeout(this.saveTimeout);
-            }
-            this.saveTimeout = setTimeout(() => {
-                this.savePermissions(true);
-            }, 300);
-        },
-
-        async savePermissions(isAuto = false) {
-            if (this.saveTimeout) {
-                clearTimeout(this.saveTimeout);
-                this.saveTimeout = null;
-            }
-            this.shareModal.isSaving = true;
-            this.shareModal.saveStatus = 'saving';
-
-            const type = this.shareModal.type;
-            const key = (type === 'folder') ? this.shareModal.id : (this.shareModal.uuid || this.shareModal.id);
-            const currentSelected = [...this.shareModal.selectedBiros];
-
-            // Update in-memory cache immediately so UI is always responsive and fresh
-            if (!this.permissionsCache[type]) {
-                this.permissionsCache[type] = {};
-            }
-            this.permissionsCache[type][key] = currentSelected;
-
-            if (this.contextMenu.item && (this.contextMenu.item.id === this.shareModal.id || this.contextMenu.item.uuid === this.shareModal.uuid)) {
-                this.contextMenu.item.shared_departments = currentSelected;
-            }
-            if (this.activeDoc && (this.activeDoc.id === this.shareModal.id || this.activeDoc.uuid === this.shareModal.uuid)) {
-                this.activeDoc.shared_departments = currentSelected;
-            }
-
-            const endpoint = type === 'folder'
-                ? `/folders/${this.shareModal.id}/share`
-                : `/documents/${this.shareModal.uuid || this.shareModal.id}/share`;
-
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        shared_departments: currentSelected
-                    })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    this.shareModal.saveStatus = 'saved';
-                    const savedDepts = Array.isArray(data.shared_departments) ? data.shared_departments : currentSelected;
-                    this.permissionsCache[type][key] = savedDepts;
-                    this.shareModal.selectedBiros = [...savedDepts];
-
-                    if (!isAuto) {
-                        this.triggerToast(data.message || 'Izin akses biro berhasil disimpan!');
-                    }
-                    setTimeout(() => {
-                        if (this.shareModal.saveStatus === 'saved') {
-                            this.shareModal.saveStatus = '';
-                        }
-                    }, 2500);
-                } else {
-                    this.shareModal.saveStatus = 'error';
-                    if (!isAuto) {
-                        alert(data.message || 'Gagal menyimpan izin akses.');
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-                this.shareModal.saveStatus = 'error';
-                if (!isAuto) {
-                    alert('Terjadi kesalahan saat menyimpan izin akses biro.');
-                }
-            } finally {
-                this.shareModal.isSaving = false;
-            }
-        },
-
-        async closeShareModal() {
-            if (this.saveTimeout) {
-                clearTimeout(this.saveTimeout);
-                this.saveTimeout = null;
-                await this.savePermissions(true);
-            }
-            this.shareModal.open = false;
-        },
-
-        async copyShareLink() {
-            try {
-                await navigator.clipboard.writeText(this.shareModal.url);
-                this.shareModal.copied = true;
-                this.triggerToast('Tautan berhasil disalin ke clipboard!');
-                setTimeout(() => { this.shareModal.copied = false; }, 2500);
-            } catch (err) {
-                const tempInput = document.createElement('input');
-                tempInput.value = this.shareModal.url;
-                document.body.appendChild(tempInput);
-                tempInput.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempInput);
-                this.shareModal.copied = true;
-                this.triggerToast('Tautan berhasil disalin!');
-                setTimeout(() => { this.shareModal.copied = false; }, 2500);
-            }
-        },
-
-        shareViaWhatsApp() {
-            const text = encodeURIComponent(`Berikut tautan ${this.shareModal.type === 'folder' ? 'folder' : 'dokumen'} '${this.shareModal.title}': ${this.shareModal.url}`);
-            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
-        },
-
-        shareViaEmail() {
-            const subject = encodeURIComponent(`${this.shareModal.type === 'folder' ? 'Folder' : 'Dokumen'}: ${this.shareModal.title}`);
-            const body = encodeURIComponent(`Halo,\n\nBerikut tautan untuk mengakses ${this.shareModal.type === 'folder' ? 'folder' : 'dokumen'} '${this.shareModal.title}':\n${this.shareModal.url}\n\nTerima kasih.`);
-            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-        },
-
-        openRenameFolder(id, name) {
-            this.editFolderId = id;
-            this.editFolderName = name;
-            this.renameFolderModal = true;
-        },
-
-        openMoveDoc(id, name) {
-            this.moveDocId = id;
-            this.moveDocName = name;
-            this.moveDocModal = true;
-        },
-
-        selectDoc(doc) {
-            this.activeDoc = doc;
-            this.inspectorOpen = true;
-        },
-
-        onDocDragStart(event, docId) {
-            this.draggedDocId = docId;
-            event.dataTransfer.setData('text/plain', docId);
-            event.dataTransfer.effectAllowed = 'move';
-        },
-
-        onFolderDragOver(event, folderId) {
-            event.preventDefault();
-            this.hoveredFolderId = folderId;
-            event.dataTransfer.dropEffect = 'move';
-        },
-
-        onFolderDragLeave(event, folderId) {
-            if (this.hoveredFolderId === folderId) {
-                this.hoveredFolderId = null;
-            }
-        },
-
-        async onFolderDrop(event, targetFolderId) {
-            event.preventDefault();
-            this.hoveredFolderId = null;
-
-            if (event.dataTransfer.types && event.dataTransfer.types.includes('Files')) {
-                await this.handleDropItems(event.dataTransfer, targetFolderId);
-                return;
-            }
-
-            const docId = this.draggedDocId || event.dataTransfer.getData('text/plain');
-            if (!docId) return;
-
-            try {
-                const response = await fetch('/documents/' + docId + '/move', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ folder_id: targetFolderId })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    this.triggerToast(data.message);
-                    setTimeout(() => { window.location.reload(); }, 600);
-                } else {
-                    alert(data.message || 'Gagal memindahkan dokumen.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Terjadi kesalahan saat memindahkan dokumen.');
-            }
-        },
-
-        onWindowDragOver(event) {
-            event.preventDefault();
-            if (event.dataTransfer.types && event.dataTransfer.types.includes('Files')) {
-                this.isDraggingFileOver = true;
-            }
-        },
-
-        onWindowDragLeave(event) {
-            if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
-                this.isDraggingFileOver = false;
-            }
-        },
-
-        async onWindowDrop(event) {
-            event.preventDefault();
-            this.isDraggingFileOver = false;
-            const currentFolderId = '{{ $currentFolder ? $currentFolder->id : '' }}';
-            await this.handleDropItems(event.dataTransfer, currentFolderId || null);
-        },
-
-        async handleDropItems(dataTransfer, targetFolderId) {
-            const items = dataTransfer.items;
-            this.isUploading = true;
-            this.uploadMessage = 'Memeriksa berkas dan folder...';
-
-            const queue = [];
-
-            if (items && items.length > 0) {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    if (item.kind !== 'file') continue;
-
-                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                    if (entry) {
-                        const traversed = await this.traverseFileSystemEntry(entry, targetFolderId);
-                        queue.push(...traversed);
-                    } else {
-                        const file = item.getAsFile();
-                        if (file) queue.push({ file: file, folderId: targetFolderId });
-                    }
-                }
-            } else if (dataTransfer.files && dataTransfer.files.length > 0) {
-                for (let i = 0; i < dataTransfer.files.length; i++) {
-                    queue.push({ file: dataTransfer.files[i], folderId: targetFolderId });
-                }
-            }
-
-            if (queue.length === 0) {
-                this.isUploading = false;
-                this.triggerToast('Folder berhasil dibuat!');
-                setTimeout(() => { window.location.reload(); }, 600);
-                return;
-            }
-
-            await this.processUploadQueue(queue);
-        },
-
-        async traverseFileSystemEntry(entry, parentFolderId) {
-            if (entry.isFile) {
-                return new Promise(resolve => {
-                    entry.file(file => {
-                        resolve([{ file: file, folderId: parentFolderId }]);
-                    }, () => resolve([]));
-                });
-            } else if (entry.isDirectory) {
-                this.uploadMessage = 'Membuat folder ' + entry.name + '...';
-                let createdFolderId = parentFolderId;
-
-                try {
-                    const res = await fetch('{{ route("folders.store") }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            name: entry.name,
-                            parent_id: parentFolderId || null
-                        })
-                    });
-                    const resData = await res.json();
-                    if (resData.success && resData.folder) {
-                        createdFolderId = resData.folder.id;
-                    }
-                } catch (err) {
-                    console.error('Gagal membuat folder:', entry.name, err);
-                }
-
-                const dirReader = entry.createReader();
-                const entries = await new Promise(resolve => {
-                    const all = [];
-                    function readNext() {
-                        dirReader.readEntries(results => {
-                            if (results.length > 0) {
-                                all.push(...results);
-                                readNext();
-                            } else {
-                                resolve(all);
-                            }
-                        }, () => resolve(all));
-                    }
-                    readNext();
-                });
-
-                const nested = [];
-                for (const child of entries) {
-                    const childItems = await this.traverseFileSystemEntry(child, createdFolderId);
-                    nested.push(...childItems);
-                }
-                return nested;
-            }
-            return [];
-        },
-
-        async uploadFolderPicker(files, baseFolderId) {
-            if (!files || files.length === 0) return;
-            this.isUploading = true;
-            this.uploadMessage = 'Mempersiapkan struktur folder...';
-
-            const folderMap = {};
-            const queue = [];
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const relPath = file.webkitRelativePath || file.name;
-                const parts = relPath.split('/');
-
-                let parentId = baseFolderId || null;
-                let currentPath = '';
-
-                for (let p = 0; p < parts.length - 1; p++) {
-                    const folderName = parts[p];
-                    currentPath = currentPath ? (currentPath + '/' + folderName) : folderName;
-
-                    if (folderMap[currentPath]) {
-                        parentId = folderMap[currentPath];
-                    } else {
-                        try {
-                            const res = await fetch('{{ route("folders.store") }}', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    name: folderName,
-                                    parent_id: parentId
-                                })
-                            });
-                            const data = await res.json();
-                            if (data.success && data.folder) {
-                                folderMap[currentPath] = data.folder.id;
-                                parentId = data.folder.id;
-                            }
-                        } catch (e) {
-                            console.error('Gagal membuat folder:', folderName, e);
-                        }
-                    }
-                }
-
-                queue.push({ file: file, folderId: parentId });
-            }
-
-            await this.processUploadQueue(queue);
-        },
-
-        async processUploadQueue(queue) {
-            this.isUploading = true;
-            this.uploadMessage = 'Mengunggah ' + queue.length + ' berkas...';
-
-            for (let i = 0; i < queue.length; i++) {
-                const item = queue[i];
-                const formData = new FormData();
-                formData.append('file', item.file);
-                if (item.folderId) {
-                    formData.append('folder_id', item.folderId);
-                }
-
-                try {
-                    this.uploadMessage = 'Mengunggah (' + (i + 1) + '/' + queue.length + '): ' + item.file.name;
-                    const res = await fetch('{{ route("folders.quick-upload") }}', {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                            'Accept': 'application/json'
-                        },
-                        body: formData
-                    });
-                    const resData = await res.json();
-                    if (!resData.success) {
-                        console.error('Gagal mengunggah ' + item.file.name, resData);
-                    }
-                } catch (err) {
-                    console.error('Gagal mengunggah berkas ' + item.file.name, err);
-                }
-            }
-
-            this.isUploading = false;
-            this.triggerToast('Semua berkas dan folder berhasil diunggah!');
-            setTimeout(() => { window.location.reload(); }, 600);
-        },
-
-        async uploadFiles(files, folderId) {
-            const queue = [];
-            for (let i = 0; i < files.length; i++) {
-                queue.push({ file: files[i], folderId: folderId });
-            }
-            await this.processUploadQueue(queue);
-        }
-    }"
+         x-data="fileExplorer()"
     @dragover="onWindowDragOver($event)"
     @dragleave="onWindowDragLeave($event)"
     @drop="onWindowDrop($event)">
@@ -1271,6 +607,11 @@
                                                     <span>ACC</span>
                                                 </button>
                                                 @endif
+                                                @if(auth()->check() && auth()->user()->isAdmin())
+                                                <button type="button" @click.stop="openEditDateModal({{ json_encode($docPayload) }})" class="text-gray-400 hover:text-[#002147] p-1 rounded-md hover:bg-amber-50 transition-colors cursor-pointer" title="Ubah Tanggal Tampil">
+                                                    <svg class="w-3.5 h-3.5 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </button>
+                                                @endif
                                                 @if($canManageDoc)
                                                 <button @click.stop="openShare('document', {{ json_encode($docPayload) }})" class="text-gray-400 hover:text-emerald-600 p-1 rounded-md hover:bg-emerald-50 transition-colors" title="Bagikan Dokumen">
                                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
@@ -1400,6 +741,11 @@
                                                     <button type="button" @click.stop="quickApproveDoc({{ json_encode($docPayload) }})" class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition-colors shadow-xs" title="ACC Dokumen Ini">
                                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                         <span>ACC</span>
+                                                    </button>
+                                                    @endif
+                                                    @if(auth()->check() && auth()->user()->isAdmin())
+                                                    <button type="button" @click.stop="openEditDateModal({{ json_encode($docPayload) }})" class="text-gray-400 hover:text-[#002147] p-1 rounded hover:bg-gray-100" title="Ubah Tanggal Tampil">
+                                                        <svg class="w-4 h-4 text-[#f1b500]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                                     </button>
                                                     @endif
                                                     @if($canManageDoc)
@@ -2004,4 +1350,682 @@
             </div>
         </div>
     </div>
+
+
+<script>
+function fileExplorer() {
+    return {
+        viewMode: 'grid',
+        createFolderModal: false,
+        renameFolderModal: false,
+        moveDocModal: false,
+        previewModal: false,
+        inspectorOpen: false,
+        activeDoc: null,
+
+        editFolderId: null,
+        editFolderName: '',
+        moveDocId: null,
+        moveDocName: '',
+
+        // Context Menu (Right-click) State
+        contextMenu: {
+            show: false,
+            x: 0,
+            y: 0,
+            type: '',
+            item: null
+        },
+
+        // Edit Display Date Modal State
+        editDateModal: {
+            open: false,
+            id: null,
+            uuid: null,
+            name: '',
+            currentDate: '',
+            newDate: '',
+            isSaving: false
+        },
+
+        // Share Modal State
+        shareModal: {
+            open: false,
+            id: null,
+            uuid: null,
+            type: '',
+            title: '',
+            url: '',
+            department: '',
+            visibility: '',
+            selectedBiros: [],
+            isSaving: false,
+            saveStatus: '',
+            copied: false
+        },
+        permissionsCache: {
+            document: {},
+            folder: {}
+        },
+        saveTimeout: null,
+        allUnits: {{ Js::from(\App\Models\User::UNITS) }},
+
+        isDraggingFileOver: false,
+        draggedDocId: null,
+        hoveredFolderId: null,
+        isUploading: false,
+        uploadMessage: '',
+        toastMessage: '',
+        showToast: false,
+
+        triggerToast(msg) {
+            this.toastMessage = msg;
+            this.showToast = true;
+            setTimeout(() => { this.showToast = false; }, 3500);
+        },
+
+        openContextMenu(event, type, item) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.contextMenu.show = true;
+            this.contextMenu.type = type;
+            this.contextMenu.item = item;
+            if (type === 'document' && item) {
+                this.activeDoc = item;
+            }
+
+            const menuWidth = 220;
+            const menuHeight = 250;
+            const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
+            const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
+
+            this.contextMenu.x = Math.max(10, x);
+            this.contextMenu.y = Math.max(10, y);
+        },
+
+        closeContextMenu() {
+            this.contextMenu.show = false;
+        },
+
+        openEditDateModal(doc) {
+            this.closeContextMenu();
+            if (!doc) return;
+            this.activeDoc = doc;
+            this.editDateModal.id = doc.id;
+            this.editDateModal.uuid = doc.uuid || doc.id;
+            this.editDateModal.name = doc.name;
+            this.editDateModal.currentDate = doc.raw_date || '';
+            this.editDateModal.newDate = doc.raw_date || '';
+            this.editDateModal.isSaving = false;
+            this.editDateModal.open = true;
+        },
+
+        async saveDisplayDate() {
+            if (!this.editDateModal.newDate) return;
+            this.editDateModal.isSaving = true;
+
+            const targetUuid = this.editDateModal.uuid || this.editDateModal.id;
+            try {
+                const response = await fetch(`/documents/${targetUuid}/display-date`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        display_date: this.editDateModal.newDate
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message || 'Tanggal tampil berhasil diubah.');
+
+                    if (this.activeDoc && (this.activeDoc.id === this.editDateModal.id || this.activeDoc.uuid === this.editDateModal.uuid)) {
+                        this.activeDoc.date = data.display_date_formatted;
+                        this.activeDoc.raw_date = data.display_date;
+                    }
+
+                    this.editDateModal.open = false;
+                    setTimeout(() => window.location.reload(), 250);
+                } else {
+                    alert(data.message || 'Gagal mengubah tanggal tampil.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat mengubah tanggal tampil.');
+            } finally {
+                this.editDateModal.isSaving = false;
+            }
+        },
+
+        async quickApproveDoc(doc) {
+            if (!confirm(`Setujui (ACC) dokumen "${doc.name}"? Dokumen ini akan langsung terbit dan dapat diakses pengguna.`)) return;
+            try {
+                const response = await fetch(`/approvals/${doc.uuid || doc.id}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        notes: 'Disetujui via File Explorer'
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message || 'Dokumen berhasil di-ACC.');
+                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
+                        this.activeDoc.status = 'approved';
+                        this.activeDoc.status_label = 'Disetujui (ACC)';
+                        this.activeDoc.status_color = 'green';
+                        this.activeDoc.needs_acc = false;
+                    }
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    alert(data.message || 'Gagal menyetujui dokumen.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat memproses approval.');
+            }
+        },
+
+        async quickRejectDoc(doc) {
+            const notes = prompt(`Masukkan catatan revisi untuk "${doc.name}":`);
+            if (notes === null) return;
+            if (!notes.trim()) {
+                alert('Catatan revisi wajib diisi.');
+                return;
+            }
+            try {
+                const response = await fetch(`/approvals/${doc.uuid || doc.id}/revision`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ notes })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message || 'Permintaan revisi berhasil dikirim.');
+                    if (this.activeDoc && (this.activeDoc.id === doc.id || this.activeDoc.uuid === doc.uuid)) {
+                        this.activeDoc.status = 'revision';
+                        this.activeDoc.status_label = 'Perlu Revisi';
+                        this.activeDoc.status_color = 'red';
+                        this.activeDoc.needs_acc = false;
+                    }
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    alert(data.message || 'Gagal mengirim revisi.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat memproses revisi.');
+            }
+        },
+
+        openShare(type, item) {
+            this.closeContextMenu();
+            this.shareModal.type = type;
+            this.shareModal.id = item.id;
+            this.shareModal.uuid = item.uuid || null;
+            this.shareModal.title = item.name;
+            this.shareModal.department = item.department || 'Umum';
+            this.shareModal.visibility = item.visibility || 'Tampil ke Viewer';
+            this.shareModal.copied = false;
+            this.shareModal.isSaving = false;
+            this.shareModal.saveStatus = '';
+
+            const key = (type === 'folder') ? item.id : (item.uuid || item.id);
+            if (this.permissionsCache[type] && this.permissionsCache[type][key] !== undefined) {
+                this.shareModal.selectedBiros = [...this.permissionsCache[type][key]];
+            } else if (Array.isArray(item.shared_departments)) {
+                this.shareModal.selectedBiros = [...item.shared_departments];
+                if (!this.permissionsCache[type]) this.permissionsCache[type] = {};
+                this.permissionsCache[type][key] = [...item.shared_departments];
+            } else {
+                this.shareModal.selectedBiros = [];
+            }
+
+            if (type === 'folder') {
+                this.shareModal.url = `${window.location.origin}/folders?folder_id=${item.id}`;
+            } else {
+                this.shareModal.url = item.preview_url || `${window.location.origin}/documents/${item.uuid}/preview`;
+            }
+            this.shareModal.open = true;
+        },
+
+        selectAllBiros() {
+            this.shareModal.selectedBiros = [...this.allUnits];
+            this.autoSavePermissions();
+        },
+
+        deselectAllBiros() {
+            this.shareModal.selectedBiros = [];
+            this.autoSavePermissions();
+        },
+
+        toggleBiro(biro) {
+            const index = this.shareModal.selectedBiros.indexOf(biro);
+            if (index > -1) {
+                this.shareModal.selectedBiros.splice(index, 1);
+            } else {
+                this.shareModal.selectedBiros.push(biro);
+            }
+            this.autoSavePermissions();
+        },
+
+        autoSavePermissions() {
+            this.shareModal.saveStatus = 'saving';
+            if (this.saveTimeout) {
+                clearTimeout(this.saveTimeout);
+            }
+            this.saveTimeout = setTimeout(() => {
+                this.savePermissions(true);
+            }, 300);
+        },
+
+        async savePermissions(isAuto = false) {
+            if (this.saveTimeout) {
+                clearTimeout(this.saveTimeout);
+                this.saveTimeout = null;
+            }
+            this.shareModal.isSaving = true;
+            this.shareModal.saveStatus = 'saving';
+
+            const type = this.shareModal.type;
+            const key = (type === 'folder') ? this.shareModal.id : (this.shareModal.uuid || this.shareModal.id);
+            const currentSelected = [...this.shareModal.selectedBiros];
+
+            // Update in-memory cache immediately so UI is always responsive and fresh
+            if (!this.permissionsCache[type]) {
+                this.permissionsCache[type] = {};
+            }
+            this.permissionsCache[type][key] = currentSelected;
+
+            if (this.contextMenu.item && (this.contextMenu.item.id === this.shareModal.id || this.contextMenu.item.uuid === this.shareModal.uuid)) {
+                this.contextMenu.item.shared_departments = currentSelected;
+            }
+            if (this.activeDoc && (this.activeDoc.id === this.shareModal.id || this.activeDoc.uuid === this.shareModal.uuid)) {
+                this.activeDoc.shared_departments = currentSelected;
+            }
+
+            const endpoint = type === 'folder'
+                ? `/folders/${this.shareModal.id}/share`
+                : `/documents/${this.shareModal.uuid || this.shareModal.id}/share`;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        shared_departments: currentSelected
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    this.shareModal.saveStatus = 'saved';
+                    const savedDepts = Array.isArray(data.shared_departments) ? data.shared_departments : currentSelected;
+                    this.permissionsCache[type][key] = savedDepts;
+                    this.shareModal.selectedBiros = [...savedDepts];
+
+                    if (!isAuto) {
+                        this.triggerToast(data.message || 'Izin akses biro berhasil disimpan!');
+                    }
+                    setTimeout(() => {
+                        if (this.shareModal.saveStatus === 'saved') {
+                            this.shareModal.saveStatus = '';
+                        }
+                    }, 2500);
+                } else {
+                    this.shareModal.saveStatus = 'error';
+                    if (!isAuto) {
+                        alert(data.message || 'Gagal menyimpan izin akses.');
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                this.shareModal.saveStatus = 'error';
+                if (!isAuto) {
+                    alert('Terjadi kesalahan saat menyimpan izin akses biro.');
+                }
+            } finally {
+                this.shareModal.isSaving = false;
+            }
+        },
+
+        async closeShareModal() {
+            if (this.saveTimeout) {
+                clearTimeout(this.saveTimeout);
+                this.saveTimeout = null;
+                await this.savePermissions(true);
+            }
+            this.shareModal.open = false;
+        },
+
+        async copyShareLink() {
+            try {
+                await navigator.clipboard.writeText(this.shareModal.url);
+                this.shareModal.copied = true;
+                this.triggerToast('Tautan berhasil disalin ke clipboard!');
+                setTimeout(() => { this.shareModal.copied = false; }, 2500);
+            } catch (err) {
+                const tempInput = document.createElement('input');
+                tempInput.value = this.shareModal.url;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                this.shareModal.copied = true;
+                this.triggerToast('Tautan berhasil disalin!');
+                setTimeout(() => { this.shareModal.copied = false; }, 2500);
+            }
+        },
+
+        shareViaWhatsApp() {
+            const text = encodeURIComponent(`Berikut tautan ${this.shareModal.type === 'folder' ? 'folder' : 'dokumen'} '${this.shareModal.title}': ${this.shareModal.url}`);
+            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        },
+
+        shareViaEmail() {
+            const subject = encodeURIComponent(`${this.shareModal.type === 'folder' ? 'Folder' : 'Dokumen'}: ${this.shareModal.title}`);
+            const body = encodeURIComponent(`Halo,\n\nBerikut tautan untuk mengakses ${this.shareModal.type === 'folder' ? 'folder' : 'dokumen'} '${this.shareModal.title}':\n${this.shareModal.url}\n\nTerima kasih.`);
+            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+        },
+
+        openRenameFolder(id, name) {
+            this.editFolderId = id;
+            this.editFolderName = name;
+            this.renameFolderModal = true;
+        },
+
+        openMoveDoc(id, name) {
+            this.moveDocId = id;
+            this.moveDocName = name;
+            this.moveDocModal = true;
+        },
+
+        selectDoc(doc) {
+            this.activeDoc = doc;
+            this.inspectorOpen = true;
+        },
+
+        onDocDragStart(event, docId) {
+            this.draggedDocId = docId;
+            event.dataTransfer.setData('text/plain', docId);
+            event.dataTransfer.effectAllowed = 'move';
+        },
+
+        onFolderDragOver(event, folderId) {
+            event.preventDefault();
+            this.hoveredFolderId = folderId;
+            event.dataTransfer.dropEffect = 'move';
+        },
+
+        onFolderDragLeave(event, folderId) {
+            if (this.hoveredFolderId === folderId) {
+                this.hoveredFolderId = null;
+            }
+        },
+
+        async onFolderDrop(event, targetFolderId) {
+            event.preventDefault();
+            this.hoveredFolderId = null;
+
+            if (event.dataTransfer.types && event.dataTransfer.types.includes('Files')) {
+                await this.handleDropItems(event.dataTransfer, targetFolderId);
+                return;
+            }
+
+            const docId = this.draggedDocId || event.dataTransfer.getData('text/plain');
+            if (!docId) return;
+
+            try {
+                const response = await fetch('/documents/' + docId + '/move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ folder_id: targetFolderId })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    this.triggerToast(data.message);
+                    setTimeout(() => { window.location.reload(); }, 600);
+                } else {
+                    alert(data.message || 'Gagal memindahkan dokumen.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Terjadi kesalahan saat memindahkan dokumen.');
+            }
+        },
+
+        onWindowDragOver(event) {
+            event.preventDefault();
+            if (event.dataTransfer.types && event.dataTransfer.types.includes('Files')) {
+                this.isDraggingFileOver = true;
+            }
+        },
+
+        onWindowDragLeave(event) {
+            if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
+                this.isDraggingFileOver = false;
+            }
+        },
+
+        async onWindowDrop(event) {
+            event.preventDefault();
+            this.isDraggingFileOver = false;
+            const currentFolderId = '{{ $currentFolder ? $currentFolder->id : '' }}';
+            await this.handleDropItems(event.dataTransfer, currentFolderId || null);
+        },
+
+        async handleDropItems(dataTransfer, targetFolderId) {
+            const items = dataTransfer.items;
+            this.isUploading = true;
+            this.uploadMessage = 'Memeriksa berkas dan folder...';
+
+            const queue = [];
+
+            if (items && items.length > 0) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind !== 'file') continue;
+
+                    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                    if (entry) {
+                        const traversed = await this.traverseFileSystemEntry(entry, targetFolderId);
+                        queue.push(...traversed);
+                    } else {
+                        const file = item.getAsFile();
+                        if (file) queue.push({ file: file, folderId: targetFolderId });
+                    }
+                }
+            } else if (dataTransfer.files && dataTransfer.files.length > 0) {
+                for (let i = 0; i < dataTransfer.files.length; i++) {
+                    queue.push({ file: dataTransfer.files[i], folderId: targetFolderId });
+                }
+            }
+
+            if (queue.length === 0) {
+                this.isUploading = false;
+                this.triggerToast('Folder berhasil dibuat!');
+                setTimeout(() => { window.location.reload(); }, 600);
+                return;
+            }
+
+            await this.processUploadQueue(queue);
+        },
+
+        async traverseFileSystemEntry(entry, parentFolderId) {
+            if (entry.isFile) {
+                return new Promise(resolve => {
+                    entry.file(file => {
+                        resolve([{ file: file, folderId: parentFolderId }]);
+                    }, () => resolve([]));
+                });
+            } else if (entry.isDirectory) {
+                this.uploadMessage = 'Membuat folder ' + entry.name + '...';
+                let createdFolderId = parentFolderId;
+
+                try {
+                    const res = await fetch('{{ route("folders.store") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            name: entry.name,
+                            parent_id: parentFolderId || null
+                        })
+                    });
+                    const resData = await res.json();
+                    if (resData.success && resData.folder) {
+                        createdFolderId = resData.folder.id;
+                    }
+                } catch (err) {
+                    console.error('Gagal membuat folder:', entry.name, err);
+                }
+
+                const dirReader = entry.createReader();
+                const entries = await new Promise(resolve => {
+                    const all = [];
+                    function readNext() {
+                        dirReader.readEntries(results => {
+                            if (results.length > 0) {
+                                all.push(...results);
+                                readNext();
+                            } else {
+                                resolve(all);
+                            }
+                        }, () => resolve(all));
+                    }
+                    readNext();
+                });
+
+                const nested = [];
+                for (const child of entries) {
+                    const childItems = await this.traverseFileSystemEntry(child, createdFolderId);
+                    nested.push(...childItems);
+                }
+                return nested;
+            }
+            return [];
+        },
+
+        async uploadFolderPicker(files, baseFolderId) {
+            if (!files || files.length === 0) return;
+            this.isUploading = true;
+            this.uploadMessage = 'Mempersiapkan struktur folder...';
+
+            const folderMap = {};
+            const queue = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const relPath = file.webkitRelativePath || file.name;
+                const parts = relPath.split('/');
+
+                let parentId = baseFolderId || null;
+                let currentPath = '';
+
+                for (let p = 0; p < parts.length - 1; p++) {
+                    const folderName = parts[p];
+                    currentPath = currentPath ? (currentPath + '/' + folderName) : folderName;
+
+                    if (folderMap[currentPath]) {
+                        parentId = folderMap[currentPath];
+                    } else {
+                        try {
+                            const res = await fetch('{{ route("folders.store") }}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    name: folderName,
+                                    parent_id: parentId
+                                })
+                            });
+                            const data = await res.json();
+                            if (data.success && data.folder) {
+                                folderMap[currentPath] = data.folder.id;
+                                parentId = data.folder.id;
+                            }
+                        } catch (e) {
+                            console.error('Gagal membuat folder:', folderName, e);
+                        }
+                    }
+                }
+
+                queue.push({ file: file, folderId: parentId });
+            }
+
+            await this.processUploadQueue(queue);
+        },
+
+        async processUploadQueue(queue) {
+            this.isUploading = true;
+            this.uploadMessage = 'Mengunggah ' + queue.length + ' berkas...';
+
+            for (let i = 0; i < queue.length; i++) {
+                const item = queue[i];
+                const formData = new FormData();
+                formData.append('file', item.file);
+                if (item.folderId) {
+                    formData.append('folder_id', item.folderId);
+                }
+
+                try {
+                    this.uploadMessage = 'Mengunggah (' + (i + 1) + '/' + queue.length + '): ' + item.file.name;
+                    const res = await fetch('{{ route("folders.quick-upload") }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        },
+                        body: formData
+                    });
+                    const resData = await res.json();
+                    if (!resData.success) {
+                        console.error('Gagal mengunggah ' + item.file.name, resData);
+                    }
+                } catch (err) {
+                    console.error('Gagal mengunggah berkas ' + item.file.name, err);
+                }
+            }
+
+            this.isUploading = false;
+            this.triggerToast('Semua berkas dan folder berhasil diunggah!');
+            setTimeout(() => { window.location.reload(); }, 600);
+        },
+
+        async uploadFiles(files, folderId) {
+            const queue = [];
+            for (let i = 0; i < files.length; i++) {
+                queue.push({ file: files[i], folderId: folderId });
+            }
+            await this.processUploadQueue(queue);
+        }
+    };
+}
+</script>
 </x-explorer-layout>

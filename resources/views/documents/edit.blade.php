@@ -3,9 +3,9 @@
         <div class="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
                 <div class="flex items-center gap-2 mb-1.5">
-                    <a href="{{ route('documents.show', $document) }}" class="text-xs font-bold text-[#002147] hover:text-[#f1b500] transition-colors flex items-center gap-1">
+                    <a href="{{ $document->folder_id ? route('folders.index', ['folder_id' => $document->folder_id]) : route('documents.show', $document) }}" class="text-xs font-bold text-[#002147] hover:text-[#f1b500] transition-colors flex items-center gap-1">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                        <span>Batal &amp; Kembali ke Detail</span>
+                        <span>Batal &amp; Kembali</span>
                     </a>
                 </div>
                 <h2 class="text-2xl font-black text-[#002147] tracking-tight">Edit Metadata Dokumen</h2>
@@ -39,7 +39,12 @@
                                     <div class="md:col-span-2">
                                         <label class="block text-xs font-bold text-gray-700 mb-1">Folder Lokasi Dokumen</label>
                                         <select name="folder_id" class="w-full text-xs rounded-lg border-gray-300 shadow-xs focus:border-[#002147] focus:ring-[#002147] p-2.5">
-                                            <option value="">Root Dokumen (Tanpa Folder)</option>
+                                            <option value="" {{ empty(old('folder_id', $document->folder_id)) ? 'selected' : '' }}>Root Dokumen (Tanpa Folder)</option>
+                                            @if($document->folder && !$folders->contains('id', $document->folder_id))
+                                                <option value="{{ $document->folder->id }}" selected>
+                                                    {{ $document->folder->department ? "[{$document->folder->department}] " : "" }}{{ $document->folder->name }} (Lokasi Saat Ini)
+                                                </option>
+                                            @endif
                                             @foreach($folders as $f)
                                                 <option value="{{ $f->id }}" {{ (old('folder_id', $document->folder_id) == $f->id) ? 'selected' : '' }}>
                                                     {{ $f->department ? "[{$f->department}] " : "" }}{{ $f->name }}
@@ -182,7 +187,7 @@
                         </div>
 
                         <div class="bg-slate-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100">
-                            <a href="{{ route('folders.index', ['folder_id' => $document->folder_id]) }}" class="px-4 py-2 border border-gray-300 shadow-xs text-xs font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                            <a href="{{ $document->folder_id ? route('folders.index', ['folder_id' => $document->folder_id]) : route('folders.index') }}" class="px-4 py-2 border border-gray-300 shadow-xs text-xs font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                                 Batal
                             </a>
                             <button type="submit" class="px-5 py-2 border border-transparent shadow-xs text-xs font-bold rounded-lg text-white bg-[#002147] hover:bg-[#001733] transition-colors">
