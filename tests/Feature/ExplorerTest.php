@@ -462,6 +462,46 @@ class ExplorerTest extends TestCase
         $this->assertEquals($folder->id, $document->folder_id);
     }
 
+    public function test_admin_prodi_can_delete_document_in_their_department(): void
+    {
+        $adminPsti = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'department' => 'Program Studi Teknologi Informasi',
+        ]);
+
+        $folder = Folder::create([
+            'name' => 'Kurikulum',
+            'department' => 'Program Studi Teknologi Informasi',
+            'created_by' => $adminPsti->id,
+        ]);
+
+        $category = Category::create([
+            'name' => 'Kurikulum Cat',
+            'slug' => 'kurikulum-cat-test',
+            'is_active' => true,
+        ]);
+
+        $document = Document::create([
+            'name' => 'Dokumen Kurikulum',
+            'category_id' => $category->id,
+            'folder_id' => $folder->id,
+            'department' => 'Program Studi Teknologi Informasi',
+            'document_date' => '2026-09-26',
+            'display_date' => '2026-09-26',
+            'upload_date' => '2026-09-26',
+            'visibility' => Document::VISIBILITY_INTERNAL,
+            'status' => Document::STATUS_APPROVED,
+            'created_by' => $adminPsti->id,
+        ]);
+
+        $response = $this->actingAs($adminPsti)->delete("/documents/{$document->uuid}");
+        $response->assertRedirect(route('folders.index', ['folder_id' => $folder->id]));
+
+        $this->assertSoftDeleted('documents', [
+            'id' => $document->id,
+        ]);
+    }
+
     public function test_shared_folder_inherits_to_child_folders_and_files_and_appears_in_sidebar_for_target_biro(): void
     {
         $adminPsti = User::factory()->create([

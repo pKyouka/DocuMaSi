@@ -131,6 +131,11 @@ class Document extends Model
         return 'uuid';
     }
 
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return static::findByUuidOrId($value) ?? abort(404, 'Dokumen tidak ditemukan.');
+    }
+
     public static function findByUuidOrId($identifier): ?self
     {
         if ($identifier instanceof self) {

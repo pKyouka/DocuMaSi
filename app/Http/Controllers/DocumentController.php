@@ -311,6 +311,8 @@ class DocumentController extends Controller
     {
         $this->authorize('delete', $document);
 
+        $folderId = $document->folder_id;
+
         AuditLog::log(
             'document_deleted',
             "Dokumen '{$document->name}' dihapus.",
@@ -320,7 +322,19 @@ class DocumentController extends Controller
 
         $document->delete();
 
-        return redirect()->route('documents.index')
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Dokumen berhasil dihapus.',
+            ]);
+        }
+
+        if ($folderId) {
+            return redirect()->route('folders.index', ['folder_id' => $folderId])
+                ->with('success', 'Dokumen berhasil dihapus.');
+        }
+
+        return redirect()->route('folders.index')
             ->with('success', 'Dokumen berhasil dihapus.');
     }
 

@@ -163,7 +163,7 @@ class User extends Authenticatable
 
     public function canDeleteDocuments(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isSuperAdmin() || $this->isAdmin();
     }
 
     public function canManageCategories(): bool

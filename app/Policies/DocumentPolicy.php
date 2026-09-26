@@ -68,6 +68,14 @@ class DocumentPolicy
             return false;
         }
 
-        return $user->canDeleteDocuments();
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($document->status === Document::STATUS_DRAFT || $document->status === Document::STATUS_REVISION) {
+            return $user->id === $document->created_by;
+        }
+
+        return false;
     }
 }
